@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,22 +45,91 @@ func goSignatures(root string, entries []string) []string {
 		if !strings.HasSuffix(e, ".go") || strings.HasSuffix(e, "_test.go") {
 			continue
 		}
-		f, err := os.Open(filepath.Join(root, e))
+		data, err := os.ReadFile(filepath.Join(root, e))
 		if err != nil {
 			continue
 		}
+		lines := strings.Split(string(data), "\n")
 		var fileSigs []string
-		sc := bufio.NewScanner(f)
-		for sc.Scan() {
-			line := strings.TrimSpace(sc.Text())
-			if isGoExported(line) {
-				if len(line) > 120 {
-					line = line[:120] + "..."
-				}
-				fileSigs = append(fileSigs, line)
+		for i := 0; i < len(lines); i++ {
+			line := strings.TrimSpace(lines[i])
+			if line == "" {
+				continue
 			}
+
+			// Export groups: const ( ... ) / var ( ... )
+			if strings.HasPrefix(line, "const (") || strings.HasPrefix(line, "var (") {
+				kind := "const"
+				if strings.HasPrefix(line, "var (") {
+					kind = "var"
+				}
+				var names []string
+				for j := i + 1; j < len(lines); j++ {
+					inner := strings.TrimSpace(lines[j])
+					if inner == ")" {
+						break
+					}
+					if inner == "" || strings.HasPrefix(inner, "//") {
+						continue
+					}
+					parts := strings.Fields(inner)
+					if len(parts) > 0 && isExportedName(parts[0]) {
+						names = append(names, parts[0])
+					}
+				}
+				if len(names) > 0 {
+					fileSigs = append(fileSigs, fmt.Sprintf("%s (%s)", kind, strings.Join(names, ", ")))
+				}
+				continue
+			}
+
+			if !isGoExported(line) {
+				continue
+			}
+
+			sig := line
+			// Include struct fields for exported struct types.
+			if strings.HasPrefix(line, "type ") && strings.HasSuffix(line, " struct {") {
+				var fields []string
+				for j := i + 1; j < len(lines); j++ {
+					f := strings.TrimSpace(lines[j])
+					if f == "}" {
+						break
+					}
+					if f == "" || strings.HasPrefix(f, "//") {
+						continue
+					}
+					fields = append(fields, f)
+				}
+				if len(fields) > 0 {
+					sig = line + "\n    " + strings.Join(fields, "\n    ")
+				}
+			}
+
+			// Collect preceding godoc comments.
+			var doc []string
+			for j := i - 1; j >= 0; j-- {
+				prev := strings.TrimSpace(lines[j])
+				if strings.HasPrefix(prev, "// ") {
+					doc = append([]string{strings.TrimPrefix(prev, "// ")}, doc...)
+				} else if prev == "" {
+					break
+				} else {
+					break
+				}
+			}
+
+			var entry strings.Builder
+			for _, d := range doc {
+				entry.WriteString("// " + d + "\n")
+			}
+			entry.WriteString(sig)
+			s := entry.String()
+			if len(s) > 240 {
+				s = s[:240] + "..."
+			}
+			fileSigs = append(fileSigs, s)
 		}
-		f.Close()
 		if len(fileSigs) == 0 {
 			continue
 		}
@@ -69,15 +139,19 @@ func goSignatures(root string, entries []string) []string {
 		if total > maxSigBytes {
 			return result
 		}
-		for _, line := range fileSigs {
-			result = append(result, line)
-			total += len(line)
+		for _, s := range fileSigs {
+			result = append(result, s)
+			total += len(s)
 			if total > maxSigBytes {
 				return result
 			}
 		}
 	}
 	return result
+}
+
+func isExportedName(name string) bool {
+	return len(name) > 0 && name[0] >= 'A' && name[0] <= 'Z'
 }
 
 func isGoExported(line string) bool {

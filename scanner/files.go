@@ -132,6 +132,12 @@ func matchesAnyIgnore(ignores []dirIgnore, relSlash string) bool {
 	return false
 }
 
+type treeNode struct {
+	name     string
+	isFile   bool
+	children []*treeNode
+}
+
 // Render returns an ASCII tree representation.
 func (ft *FileTree) Render() string {
 	if len(ft.Entries) == 0 {
@@ -145,16 +151,75 @@ func (ft *FileTree) Render() string {
 		truncated = true
 	}
 
-	var sb strings.Builder
+	root := &treeNode{}
 	for _, e := range entries {
-		depth := strings.Count(e, string(os.PathSeparator))
-		sb.WriteString(strings.Repeat("  ", depth))
-		sb.WriteString("├── ")
-		sb.WriteString(filepath.Base(e))
-		sb.WriteString("\n")
+		parts := strings.Split(filepath.ToSlash(e), "/")
+		cur := root
+		for i, part := range parts {
+			if i == len(parts)-1 {
+				cur.children = append(cur.children, &treeNode{name: part, isFile: true})
+				break
+			}
+			var found *treeNode
+			for _, c := range cur.children {
+				if !c.isFile && c.name == part {
+					found = c
+					break
+				}
+			}
+			if found == nil {
+				found = &treeNode{name: part}
+				cur.children = append(cur.children, found)
+			}
+			cur = found
+		}
 	}
+	sortTree(root)
+
+	var sb strings.Builder
+	renderNode(root, "", true, &sb)
 	if truncated {
-		fmt.Fprintf(&sb, "  ... (%d more files)\n", len(ft.Entries)-200)
+		fmt.Fprintf(&sb, "... (%d more files)\n", len(ft.Entries)-200)
 	}
 	return sb.String()
+}
+
+func sortTree(n *treeNode) {
+	sort.Slice(n.children, func(i, j int) bool {
+		if n.children[i].isFile != n.children[j].isFile {
+			return !n.children[i].isFile // directories first
+		}
+		return n.children[i].name < n.children[j].name
+	})
+	for _, c := range n.children {
+		sortTree(c)
+	}
+}
+
+func renderNode(n *treeNode, prefix string, isLast bool, sb *strings.Builder) {
+	if n.name != "" {
+		connector := "├── "
+		if isLast {
+			connector = "└── "
+		}
+		sb.WriteString(prefix)
+		sb.WriteString(connector)
+		sb.WriteString(n.name)
+		if !n.isFile {
+			sb.WriteString("/")
+		}
+		sb.WriteString("\n")
+	}
+	for i, c := range n.children {
+		childIsLast := i == len(n.children)-1
+		childPrefix := prefix
+		if n.name != "" {
+			if isLast {
+				childPrefix += "    "
+			} else {
+				childPrefix += "│   "
+			}
+		}
+		renderNode(c, childPrefix, childIsLast, sb)
+	}
 }

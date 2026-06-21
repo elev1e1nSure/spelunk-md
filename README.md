@@ -13,82 +13,65 @@
 
 ---
 
-[`CLAUDE.md`](https://docs.anthropic.com/en/docs/claude-code/memory) — файл, который Claude Code читает в начале каждой сессии: архитектура, команды, соглашения, ловушки. Писать вручную — долго. `spelunk-md` анализирует проект и генерирует его за секунды через любую модель [OpenRouter](https://openrouter.ai).
+[`CLAUDE.md`](https://docs.anthropic.com/en/docs/claude-code/memory) — файл, который Claude Code читает в начале каждой сессии: архитектура проекта, команды сборки, соглашения по коду, ловушки. Писать его вручную — долго и лениво. `spelunk-md` сканирует проект и генерирует его за секунды через любую модель [OpenRouter](https://openrouter.ai).
 
 ## Быстрый старт
 
 ```bash
-# 1. Установить
+# Установить
 go install github.com/elev1e1n/spelunk-md@latest
 
-# 2. Сохранить API-ключ (один раз)
+# Сохранить API-ключ один раз
 spelunk-md --api-key sk-or-xxxxxxxxxxxxxxxx
 
-# 3. Запустить в проекте
+# Запустить в проекте
 cd /path/to/your/project
 spelunk-md
 ```
 
 > [!TIP]
-> Если не хочешь хранить ключ в keyring — просто установи переменную окружения:
-> ```bash
-> export OPENROUTER_API_KEY=sk-or-xxxxxxxxxxxxxxxx
-> ```
-> `spelunk-md` подхватит её автоматически.
+> Альтернатива keyring — переменная окружения `OPENROUTER_API_KEY`. Удобно для CI и WSL.
 
-## Что анализируется
+## Как это работает
 
-| Источник | Детали |
-|----------|--------|
-| Файловое дерево | Все файлы с учётом `.gitignore` (включая вложенные) |
-| Стек технологий | Языки по доминированию, фреймворки из `go.mod` / `package.json` / `Cargo.toml` |
-| Конфиг-файлы | `Makefile`, `justfile`, `Dockerfile`, `tsconfig.json` и др. |
-| Git-история | Последние 30 коммитов, ветка, remote URL |
-| README | Если есть — извлекается контекст о проекте |
+`spelunk-md` обходит проект и собирает всё, что нужно модели для понимания кодовой базы: файловое дерево с учётом `.gitignore` (включая вложенные), стек технологий по расширениям и манифестам (`go.mod`, `package.json`, `Cargo.toml`), содержимое ключевых конфигов (`Makefile`, `Dockerfile`, `tsconfig.json` и подобных), последние 30 коммитов из git и `README.md` если он есть. Всё это собирается в один структурированный промпт и отправляется в OpenRouter. Результат записывается в `CLAUDE.md`.
 
-## Флаги
+Перед перезаписью существующего файла инструмент спросит подтверждение. Флаг `--force` отключает вопрос.
 
-| Флаг | По умолчанию | Описание |
-|------|-------------|----------|
-| `--api-key` | — | OpenRouter API ключ (или `clear` для удаления) |
-| `--model` | `deepseek/deepseek-v4-flash` | Любая модель OpenRouter |
-| `--path` | `.` | Путь к проекту |
-| `--output` | `CLAUDE.md` | Выходной файл |
-| `--timeout` | `120` | Таймаут запроса к API (секунды) |
-| `--force` | `false` | Перезаписать без подтверждения |
-| `--dry-run` | `false` | Показать промпт без вызова API |
+> [!NOTE]
+> Модель по умолчанию — `deepseek/deepseek-v4-flash`. Быстрая и дешёвая, хорошо справляется с анализом кода. Для более детального результата попробуй `--model anthropic/claude-sonnet-4.6` или `--model google/gemini-2.5-pro`.
 
 ## Примеры
 
 ```bash
-# Другая модель
-spelunk-md --model anthropic/claude-opus-4
-
 # Внешний проект
 spelunk-md --path ~/projects/my-app
 
-# Посмотреть промпт перед отправкой
+# Другая модель
+spelunk-md --model anthropic/claude-opus-4
+
+# Посмотреть промпт без вызова API
 spelunk-md --dry-run
 
 # Записать в другой файл
-spelunk-md --output docs/PROJECT.md
+spelunk-md --output docs/PROJECT.md --force
 
 # Удалить сохранённый ключ
 spelunk-md --api-key clear
 ```
 
-> [!NOTE]
-> Модель по умолчанию — `deepseek/deepseek-v4-flash`. Быстрая, дешёвая, хорошо читает код.
-> Для качества получше можно попробовать `anthropic/claude-sonnet-4.6` или `openai/gpt-5.5`.
+Полный список флагов: `spelunk-md --help`.
 
 ## Установка
 
-**Через `go install` (рекомендуется):**
+Через `go install`:
+
 ```bash
 go install github.com/elev1e1n/spelunk-md@latest
 ```
 
-**Собрать из исходников:**
+Или собрать из исходников:
+
 ```bash
 git clone https://github.com/elev1e1n/spelunk-md
 cd spelunk-md
@@ -96,10 +79,8 @@ go build -o spelunk-md .
 ```
 
 > [!IMPORTANT]
-> API-ключ хранится в системном keyring — macOS Keychain, Windows Credential Manager, Linux Secret Service.
-> В коде и файлах проекта ключ не сохраняется.
+> API-ключ хранится в системном keyring — macOS Keychain, Windows Credential Manager или Linux Secret Service. В коде и файлах проекта ключ не появляется.
 
 ## Лицензия
 
 [MIT](LICENSE)
-<!--  -->

@@ -79,7 +79,7 @@ spelunk-md --api-key clear
 
 > [!NOTE]
 > Модель по умолчанию — `deepseek/deepseek-v4-flash`. Быстрая, дешёвая, хорошо читает код.
-> Для максимального качества можно попробовать `anthropic/claude-sonnet-4.6` или `openai/gpt-5.5`.
+> Для качества получше можно попробовать `anthropic/claude-sonnet-4.6` или `openai/gpt-5.5`.
 
 ## Установка
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/elev1e1n/spelunk-md/scanner"
@@ -103,6 +104,23 @@ Use ## headings. Be specific — generic boilerplate is useless.
 		sb.WriteString("## KEY DEPENDENCIES\n")
 		for _, d := range ctx.Meta.KeyDeps {
 			sb.WriteString("- " + d + "\n")
+		}
+		sb.WriteString("\n")
+	}
+
+	deps := scanner.ScanPackageDeps(ctx.Tree.Root, ctx.Tree.Entries)
+	if len(deps) > 0 {
+		sb.WriteString("## PACKAGE DEPENDENCIES\n")
+		var pkgs []string
+		for pkg := range deps {
+			pkgs = append(pkgs, pkg)
+		}
+		sort.Strings(pkgs)
+		for _, pkg := range pkgs {
+			if len(deps[pkg]) == 0 {
+				continue
+			}
+			sb.WriteString(pkg + " → " + strings.Join(deps[pkg], ", ") + "\n")
 		}
 		sb.WriteString("\n")
 	}
@@ -237,6 +255,19 @@ func estimatedSize(ctx *Context) int {
 		}
 	}
 	total += keySourceSize(ctx.Tree.Root)
+	total += depsSize(ctx.Tree.Root, ctx.Tree.Entries)
+	return total
+}
+
+func depsSize(root string, entries []string) int {
+	deps := scanner.ScanPackageDeps(root, entries)
+	total := 0
+	for pkg, list := range deps {
+		total += len(pkg) + 4
+		for _, d := range list {
+			total += len(d) + 2
+		}
+	}
 	return total
 }
 

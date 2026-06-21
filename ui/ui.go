@@ -45,7 +45,7 @@ func Step(label, value string) {
 func Divider() { fmt.Println() }
 
 func Success(filename, meta string) {
-	fmt.Printf("\n%s✓%s  %s%s%s  %s%s%s\n\n",
+	fmt.Printf("%s✓%s  %s%s%s  %s%s%s\n\n",
 		sage, reset,
 		bold, filename, reset,
 		faint, meta, reset,
@@ -53,7 +53,7 @@ func Success(filename, meta string) {
 }
 
 func Fail(msg string) {
-	fmt.Printf("\n%s✗%s  %s\n\n", coral, reset, msg)
+	fmt.Printf("%s✗%s  %s\n\n", coral, reset, msg)
 }
 
 func KeySaved(msg string) {

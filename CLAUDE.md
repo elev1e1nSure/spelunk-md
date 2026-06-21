@@ -2,94 +2,85 @@
 
 ## Project Overview
 
-spelunk-md is a Go CLI tool that scans a codebase and generates a `CLAUDE.md` file via AI (OpenRouter). It analyzes file trees (respecting `.gitignore`), technology stacks, configuration files, git history (last 30 commits), and README.md to produce comprehensive project documentation for AI coding assistants.
+**spelunk-md** is a Go CLI tool that scans a codebase, analyzes its structure, tech stack, config files, git history, and README, then generates a `CLAUDE.md` file via OpenRouter AI (default model: `deepseek/deepseek-v4-flash`). API key is stored securely in the system keyring (macOS Keychain, Windows Credential Manager, Linux Secret Service). Built with [Cobra](https://github.com/spf13/cobra) for CLI commands and [go-keyring](https://github.com/zalando/go-keyring) for credential management.
 
 ## Tech Stack
 
-- **Language:** Go 1.26.3
-- **CLI Framework:** Cobra (`github.com/spf13/cobra`)
-- **Key Dependencies:**
-  - `github.com/zalando/go-keyring` — secure API key storage (macOS Keychain, Windows Credential Manager, Linux Secret Service)
-  - `golang.org/x/sys` — system-level operations
-  - `github.com/danieljoos/wincred` — Windows credential management
-  - `github.com/godbus/dbus/v5` — Linux D-Bus integration
-- **Build Tool:** Just (command runner)
+- **Language:** Go 1.26.3  
+- **CLI Framework:** Cobra (v1.10.2)  
+- **Keyring:** `zalando/go-keyring` (v0.2.8)  
+- **System libs:** `golang.org/x/sys` (v0.27.0)  
+- **Task runner:** Just (see `justfile`)  
+- **Recommended model (OpenRouter):** `deepseek/deepseek-v4-flash`
 
 ## Project Structure
 
 ```
-├── main.go              # Entry point
-├── config.go            # Configuration handling
-├── claude.go            # CLAUDE.md generation logic
-├── builder.go           # Prompt building / file analysis
-├── files.go             # File tree scanning
-├── git.go               # Git history analysis
-├── stack.go             # Technology stack detection
-├── ui.go                # Terminal UI (colors, spinner, ANSI)
-├── ansi_other.go        # ANSI support (non-Windows)
-├── ansi_windows.go      # ANSI support (Windows)
-├── go.mod / go.sum      # Module dependencies
-├── justfile             # Development task runner
-└── README.md            # User documentation
+spelunk-md/
+├── main.go               # Entry point
+├── config.go             # Configuration handling (flags, keyring)
+├── claude.go             # AI prompt generation and API call logic
+├── builder.go            # File tree / project structure builder
+├── files.go              # File scanning helpers
+├── git.go                # Git history extraction
+├── stack.go              # Tech stack detection
+├── ui.go                 # Terminal UI (spinner, colors, etc.)
+├── ansi_other.go         # ANSI support (non-Windows)
+├── ansi_windows.go       # ANSI support (Windows)
+├── go.mod / go.sum       # Module dependencies
+├── justfile              # Dev task runner
+├── README.md             # User documentation
+├── LICENSE
+└── .gitignore
 ```
 
 ## Development Commands
 
-All commands are run via `just`:
+All commands are run from the project root via [Just](https://github.com/casey/just).
 
-| Command | Description |
-|---------|-------------|
-| `just build` | Compile binary (`spelunk-md` or `spelunk-md.exe`) |
-| `just install` | Install to `$GOPATH/bin` |
-| `just check` | Run `go vet ./...` + `go build ./...` |
-| `just tidy` | Run `go mod tidy` |
-| `just dry` | Dry-run on current directory (`go run . --dry-run`) |
-| `just clean` | Remove built binary |
+| Command        | Description                                    |
+|----------------|------------------------------------------------|
+| `just`         | Show available commands (default)              |
+| `just build`   | Compile binary (`spelunk-md` or `spelunk-md.exe`) |
+| `just install` | `go install` to `$GOPATH/bin`                  |
+| `just check`   | `go vet ./...` + `go build ./...`              |
+| `just tidy`    | `go mod tidy`                                  |
+| `just dry`     | Dry run on current directory (no API call)     |
+| `just clean`   | Remove built binary                            |
 
-Direct Go commands:
-
+Other useful commands:
 - `go build -o spelunk-md .` — manual build
-- `go install .` — install to GOPATH
+- `go run . --dry-run` — dry run without just
 - `go vet ./...` — static analysis
 - `go mod tidy` — clean dependencies
-- `go run . --dry-run` — preview prompt without API call
 
 ## Architecture & Key Decisions
 
-1. **API Key Security:** Keys are stored in the system keyring (not in files or code) via `go-keyring`. Use `--api-key` to set, `--api-key clear` to remove.
-
-2. **Default Model:** `deepseek/deepseek-v4-flash` — fast, cheap, good at code analysis. Override with `--model`.
-
-3. **Analysis Scope:**
-   - File tree (respects `.gitignore`)
-   - Technology stack detection (extensions, `go.mod`, `package.json`, `Cargo.toml`, etc.)
-   - Key config files (`Makefile`, `Dockerfile`, `tsconfig.json`, etc.)
-   - Last 30 git commits
-   - `README.md` if present
-
-4. **Output:** Generates `CLAUDE.md` (configurable via `--output`).
-
-5. **UI Package:** Custom terminal UI with colored output, spinner animation, and cross-platform ANSI support (separate implementations for Windows and other OS).
-
-6. **Cobra CLI:** All flags are defined via Cobra (`--api-key`, `--model`, `--path`, `--output`, `--dry-run`).
+- **API key security:** Key is stored in the OS keyring (via `go-keyring`) — never in files or environment variables. Use `--api-key` to save; `--api-key clear` to remove.
+- **Prompt construction:** The tool reads the project tree (respecting `.gitignore`), detects tech stack from extension maps and config files (`go.mod`, `package.json`, `Cargo.toml`, etc.), extracts last 30 git commits, and includes `README.md` content. This is assembled into a prompt sent to OpenRouter.
+- **Output:** Writes a `CLAUDE.md` file (customizable via `--output`).
+- **Cross-platform ANSI:** Two files (`ansi_other.go` / `ansi_windows.go`) provide terminal color and spinner support on all platforms.
+- **No tests yet** — no test files or test infrastructure observed.
 
 ## Code Conventions
 
-- **Language:** Go standard formatting (`gofmt`/`go vet` compliant)
-- **Error Handling:** Standard Go error returns; no panics in production paths
-- **Imports:** Grouped: stdlib, external, internal (no explicit convention enforced, but follow existing patterns)
-- **Naming:** CamelCase for exported, camelCase for unexported
-- **Comments:** English comments for exported functions/types; Russian comments in justfile and README
-- **File Organization:** One primary concern per file (config, git, files, stack, ui)
-- **Platform-specific code:** Use build tags (`ansi_other.go` vs `ansi_windows.go`)
+- **Language:** Go, standard formatting (`gofmt`).
+- **Error handling:** Idiomatic Go (return errors, check them).
+- **Flag style:** Cobra persistent flags, `--kebab-case` naming.
+- **Imports:** Grouped: stdlib → third-party → internal.
+- **Comments:** Go-style doc comments for exported functions.
+- **No separate `cmd/` package** — CLI logic is in top-level files (e.g., `config.go`, `claude.go`).
+- **UI output:** Uses the internal `ui` package for consistent colored output (see `justfile` recipes, `ui.go`).
+- **Module path:** `github.com/elev1e1n/spelunk-md`
 
 ## Important Notes / Gotchas
 
-- **Go 1.26.3 required** — module uses modern Go features; ensure correct version
-- **Keyring dependency** — requires system keyring service (may fail in minimal Docker containers or headless environments without dbus)
-- **Windows ANSI** — separate implementation in `ansi_windows.go`; ensure Windows builds handle console properly
-- **Git history** — requires git to be installed and accessible; fails gracefully if not available
-- **`.gitignore` respect** — file scanning automatically excludes patterns from `.gitignore`
-- **Binary naming** — `justfile` auto-detects OS for binary name (`spelunk-md.exe` on Windows)
-- **No tests yet** — project has no test files; be cautious when refactoring
-- **Russian comments** — justfile and README contain Russian text; code comments are in English
+- **First run requires API key:** `spelunk-md --api-key sk-or-...` — key persisted in OS keyring.
+- **OpenRouter model:** Default is `deepseek/deepseek-v4-flash`. Change with `--model` (e.g., `--model anthropic/claude-opus-4`).
+- **Dry-run is safe:** `--dry-run` prints the prompt without making an API call — useful for debugging.
+- **.gitignore is respected:** File scanning honors `.gitignore` entries.
+- **Windows ANSI:** Separate ANSI handling file for Windows compatibility.
+- **Binary naming:** `just build` produces `spelunk-md` (Linux/macOS) or `spelunk-md.exe` (Windows).
+- **No test coverage:** Project currently lacks automated tests — run `go vet` before committing.
+- **Go version:** Requires Go 1.26.3 (check `go.mod`). Ensure your toolchain matches.
+- **Module name changed:** Recent commits renamed the project from `spelunk` to `spelunk-md`. Ensure all imports and builds reference `github.com/elev1e1n/spelunk-md`.

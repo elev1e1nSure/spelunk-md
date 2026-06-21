@@ -111,6 +111,24 @@ Use ## headings. Be specific — generic boilerplate is useless.
 	sb.WriteString(ctx.Tree.Render())
 	sb.WriteString("```\n\n")
 
+	// Full source of the most architecturally important files.
+	keySources := []string{"main.go", "prompt/builder.go"}
+	var sourceBlocks []string
+	for _, src := range keySources {
+		content, err := os.ReadFile(filepath.Join(ctx.Tree.Root, src))
+		if err != nil {
+			continue
+		}
+		sourceBlocks = append(sourceBlocks, fmt.Sprintf("### %s\n```go\n%s\n```\n", src, string(content)))
+	}
+	if len(sourceBlocks) > 0 {
+		sb.WriteString("## KEY SOURCE FILES\n")
+		for _, block := range sourceBlocks {
+			sb.WriteString(block)
+		}
+		sb.WriteString("\n")
+	}
+
 	if ctx.Sigs != nil && len(ctx.Sigs.Lines) > 0 {
 		sb.WriteString(fmt.Sprintf("## CODE SIGNATURES (%s)\n```\n", ctx.Sigs.Lang))
 		for _, line := range ctx.Sigs.Lines {
@@ -216,6 +234,18 @@ func estimatedSize(ctx *Context) int {
 	if ctx.Sigs != nil {
 		for _, l := range ctx.Sigs.Lines {
 			total += len(l) + 1
+		}
+	}
+	total += keySourceSize(ctx.Tree.Root)
+	return total
+}
+
+func keySourceSize(root string) int {
+	total := 0
+	for _, src := range []string{"main.go", "prompt/builder.go"} {
+		info, err := os.Stat(filepath.Join(root, src))
+		if err == nil {
+			total += int(info.Size()) + len(src) + 20 // wrapper overhead
 		}
 	}
 	return total

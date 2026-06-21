@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/elev1e1n/claude-md-gen/config"
-	"github.com/elev1e1n/claude-md-gen/generator"
-	"github.com/elev1e1n/claude-md-gen/prompt"
-	"github.com/elev1e1n/claude-md-gen/scanner"
-	"github.com/elev1e1n/claude-md-gen/ui"
+	"github.com/elev1e1n/spelunk-md/config"
+	"github.com/elev1e1n/spelunk-md/generator"
+	"github.com/elev1e1n/spelunk-md/prompt"
+	"github.com/elev1e1n/spelunk-md/scanner"
+	"github.com/elev1e1n/spelunk-md/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +24,7 @@ var (
 
 func main() {
 	root := &cobra.Command{
-		Use:   "spelunk",
+		Use:   "spelunk-md",
 		Short: "Generate CLAUDE.md for any codebase using AI",
 		Long:  `Scans your project (files, stack, git history) and generates a tailored CLAUDE.md via OpenRouter.`,
 		RunE:  run,
@@ -69,7 +69,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	projectName := filepath.Base(root)
-	ui.Header("spelunk", root)
+	ui.Header("spelunk-md", root)
 
 	spin := ui.NewSpinner("reading files")
 	spin.Start()

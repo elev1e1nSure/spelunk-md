@@ -1,10 +1,10 @@
 set shell := ["sh", "-cu"]
 
-bin := if os() == "windows" { "spelunk.exe" } else { "spelunk" }
+bin := if os() == "windows" { "spelunk-md.exe" } else { "spelunk-md" }
 
 # Показать доступные команды
 default:
-    @printf '\n  \033[1m\033[38;5;116mspelunk\033[0m  \033[2mdev commands\033[0m\n\n'
+    @printf '\n  \033[1m\033[38;5;116mspelunk-md\033[0m  \033[2mdev commands\033[0m\n\n'
     @printf '  \033[38;5;183m◆\033[0m  \033[1mbuild\033[0m      \033[2m·\033[0m  compile {{bin}}\n'
     @printf '  \033[38;5;183m◆\033[0m  \033[1minstall\033[0m    \033[2m·\033[0m  go install to \$GOPATH/bin\n'
     @printf '  \033[38;5;183m◆\033[0m  \033[1mcheck\033[0m      \033[2m·\033[0m  vet + build verify\n'

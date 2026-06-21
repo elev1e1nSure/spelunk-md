@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/elev1e1n/claude-md-gen/scanner"
+	"github.com/elev1e1n/spelunk-md/scanner"
 )
 
 // Context holds all collected project data.

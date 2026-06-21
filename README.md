@@ -1,51 +1,51 @@
-# claude-md-gen
+# spelunk-md
 
 Сканирует кодовую базу и генерирует `CLAUDE.md` через AI (OpenRouter).
 
 ## Установка
 
 ```bash
-go install github.com/elev1e1n/claude-md-gen@latest
+go install github.com/elev1e1n/spelunk-md@latest
 ```
 
 Или собрать вручную:
 ```bash
-git clone https://github.com/elev1e1n/claude-md-gen
-cd claude-md-gen
-go build -o claude-md-gen .
+git clone https://github.com/elev1e1n/spelunk-md
+cd spelunk-md
+go build -o spelunk-md .
 ```
 
 ## Использование
 
 **Первый запуск — сохранить API-ключ:**
 ```bash
-claude-md-gen --api-key sk-or-xxxxxxxxxxxxxxxx
+spelunk-md --api-key sk-or-xxxxxxxxxxxxxxxx
 ```
 Ключ хранится в системном keyring (macOS Keychain / Windows Credential Manager / Linux Secret Service). В коде и файлах нигде не лежит.
 
 **Генерация CLAUDE.md в текущем проекте:**
 ```bash
-claude-md-gen
+spelunk-md
 ```
 
 **Указать путь вручную:**
 ```bash
-claude-md-gen --path /path/to/project
+spelunk-md --path /path/to/project
 ```
 
 **Другая модель:**
 ```bash
-claude-md-gen --model anthropic/claude-opus-4
+spelunk-md --model anthropic/claude-opus-4
 ```
 
 **Посмотреть промпт без вызова API:**
 ```bash
-claude-md-gen --dry-run
+spelunk-md --dry-run
 ```
 
 **Удалить сохранённый ключ:**
 ```bash
-claude-md-gen --api-key clear
+spelunk-md --api-key clear
 ```
 
 ## Флаги

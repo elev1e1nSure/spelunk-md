@@ -54,8 +54,8 @@ func Generate(apiKey, model, prompt string) (string, error) {
 
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("HTTP-Referer", "https://github.com/elev1e1n/claude-md-gen")
-	req.Header.Set("X-Title", "claude-md-gen")
+	req.Header.Set("HTTP-Referer", "https://github.com/elev1e1n/spelunk-md")
+	req.Header.Set("X-Title", "spelunk-md")
 
 	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Do(req)

@@ -8,13 +8,13 @@ import (
 )
 
 const (
-	serviceName = "claude-md-gen"
+	serviceName = "spelunk-md"
 	accountName = "openrouter-api-key"
 
 	DefaultModel = "deepseek/deepseek-v4-flash"
 )
 
-var ErrNoAPIKey = errors.New("api key not set — run: claude-md-gen --api-key YOUR_KEY")
+var ErrNoAPIKey = errors.New("api key not set — run: spelunk-md --api-key YOUR_KEY")
 
 // SetAPIKey saves the key to the system keyring.
 func SetAPIKey(key string) error {

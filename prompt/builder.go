@@ -7,9 +7,13 @@ import (
 	"github.com/elev1e1n/spelunk-md/scanner"
 )
 
-// maxPromptBytes caps the total prompt size to stay within model context limits.
-// ~80k chars ≈ 20k tokens, comfortable for any OpenRouter model.
 const maxPromptBytes = 80_000
+
+// manifests parsed into Meta — skip raw dump in prompt.
+var skipRaw = map[string]bool{
+	"go.mod": true, "package.json": true, "Cargo.toml": true,
+	"pyproject.toml": true, "requirements.txt": true, "setup.py": true,
+}
 
 // Context holds all collected project data.
 type Context struct {
@@ -17,39 +21,65 @@ type Context struct {
 	Tree        *scanner.FileTree
 	Stack       *scanner.Stack
 	Git         *scanner.GitInfo
+	Meta        *scanner.ProjectMeta
+	Sigs        *scanner.Signatures
 }
 
 // Build constructs the full prompt for the LLM.
-// Config files are trimmed by priority if the total would exceed maxPromptBytes.
 func Build(ctx *Context) string {
 	trimConfigFiles(ctx)
 
 	var sb strings.Builder
 
-	sb.WriteString(`You are an expert software engineer tasked with generating a CLAUDE.md file.
+	sb.WriteString(`You are an expert software engineer generating a CLAUDE.md file.
 
-CLAUDE.md is a special file that Claude (an AI coding assistant) reads at the start of every session to understand:
-- The project structure and purpose
-- The tech stack and key dependencies
-- Development commands (build, test, run, lint)
+CLAUDE.md is read by Claude Code at the start of every session. It should help an AI assistant understand:
+- What the project is and does
+- Tech stack and key dependencies
+- How to build, run, and test it
 - Architecture decisions and conventions
-- Code style preferences
-- Important warnings or gotchas
+- Gotchas and non-obvious constraints
 
-Generate a comprehensive, well-structured CLAUDE.md based on the project analysis below.
-
-The output should be ONLY the CLAUDE.md content — no preamble, no explanation, no markdown code fences.
-Use clear headings (##), be concise but complete. Include all commands you can infer from the project files.
+Output ONLY the CLAUDE.md content. No preamble, no explanation, no code fences around the whole document.
+Use ## headings. Be specific — generic boilerplate is useless.
 
 ---
 
 `)
 
-	sb.WriteString(fmt.Sprintf("## PROJECT NAME\n%s\n\n", ctx.ProjectName))
-
-	if ctx.Git.IsRepo && ctx.Git.RemoteURL != "" {
-		sb.WriteString(fmt.Sprintf("## REPOSITORY\n%s\n\n", ctx.Git.RemoteURL))
+	// User context — written by maintainer, authoritative.
+	if ctx.Meta != nil && ctx.Meta.UserContext != "" {
+		sb.WriteString("## USER CONTEXT\n")
+		sb.WriteString("> Written by the project maintainer. Treat as authoritative.\n\n")
+		sb.WriteString(ctx.Meta.UserContext)
+		sb.WriteString("\n\n")
 	}
+
+	// Structured project facts.
+	sb.WriteString(fmt.Sprintf("## PROJECT\nName: %s\n", ctx.ProjectName))
+	if ctx.Git.IsRepo && ctx.Git.RemoteURL != "" {
+		sb.WriteString(fmt.Sprintf("Repository: %s\n", ctx.Git.RemoteURL))
+	}
+	if ctx.Meta != nil {
+		if ctx.Meta.RuntimeVersion != "" {
+			sb.WriteString(fmt.Sprintf("Runtime: %s\n", ctx.Meta.RuntimeVersion))
+		}
+		if ctx.Meta.License != "" {
+			sb.WriteString(fmt.Sprintf("License: %s\n", ctx.Meta.License))
+		}
+		if ctx.Meta.HasTests {
+			sb.WriteString("Tests: yes\n")
+		} else {
+			sb.WriteString("Tests: none detected\n")
+		}
+		if len(ctx.Meta.CI) > 0 {
+			sb.WriteString(fmt.Sprintf("CI: %s\n", strings.Join(ctx.Meta.CI, ", ")))
+		}
+		if len(ctx.Meta.Authors) > 0 {
+			sb.WriteString(fmt.Sprintf("Authors: %s\n", strings.Join(ctx.Meta.Authors, ", ")))
+		}
+	}
+	sb.WriteString("\n")
 
 	if ctx.Stack != nil {
 		if len(ctx.Stack.Languages) > 0 {
@@ -63,31 +93,63 @@ Use clear headings (##), be concise but complete. Include all commands you can i
 		}
 	}
 
+	if ctx.Meta != nil && len(ctx.Meta.BuildTargets) > 0 {
+		sb.WriteString(fmt.Sprintf("## BUILD COMMANDS\n%s\n\n", strings.Join(ctx.Meta.BuildTargets, ", ")))
+	}
+
+	if ctx.Meta != nil && len(ctx.Meta.KeyDeps) > 0 {
+		sb.WriteString("## KEY DEPENDENCIES\n")
+		for _, d := range ctx.Meta.KeyDeps {
+			sb.WriteString("- " + d + "\n")
+		}
+		sb.WriteString("\n")
+	}
+
 	sb.WriteString("## FILE STRUCTURE\n```\n")
 	sb.WriteString(ctx.Tree.Render())
 	sb.WriteString("```\n\n")
 
+	if ctx.Sigs != nil && len(ctx.Sigs.Lines) > 0 {
+		sb.WriteString(fmt.Sprintf("## CODE SIGNATURES (%s)\n```\n", ctx.Sigs.Lang))
+		for _, line := range ctx.Sigs.Lines {
+			sb.WriteString(line + "\n")
+		}
+		sb.WriteString("```\n\n")
+	}
+
+	// Raw config files — manifests skipped, already parsed into Meta.
 	if ctx.Stack != nil && len(ctx.Stack.ConfigFiles) > 0 {
-		sb.WriteString("## KEY CONFIGURATION FILES\n\n")
 		priority := []string{
-			"go.mod", "package.json", "Cargo.toml", "pyproject.toml", "requirements.txt",
-			"Makefile", "justfile", "Dockerfile", "docker-compose.yml", "tsconfig.json", "README.md",
+			"Makefile", "justfile", "Dockerfile", "docker-compose.yml",
+			"tsconfig.json", "vite.config.ts", "vite.config.js",
+			"tailwind.config.ts", "tailwind.config.js", ".env.example", "README.md",
 		}
 		printed := map[string]bool{}
-
+		firstHeader := true
 		for _, name := range priority {
+			if skipRaw[name] {
+				continue
+			}
 			content, ok := ctx.Stack.ConfigFiles[name]
 			if !ok {
 				continue
 			}
-			sb.WriteString(fmt.Sprintf("### %s\n```\n%s\n```\n\n", name, content))
+			if firstHeader {
+				sb.WriteString("## KEY CONFIGURATION FILES\n\n")
+				firstHeader = false
+			}
+			fmt.Fprintf(&sb, "### %s\n```\n%s\n```\n\n", name, content)
 			printed[name] = true
 		}
 		for name, content := range ctx.Stack.ConfigFiles {
-			if printed[name] {
+			if printed[name] || skipRaw[name] {
 				continue
 			}
-			sb.WriteString(fmt.Sprintf("### %s\n```\n%s\n```\n\n", name, content))
+			if firstHeader {
+				sb.WriteString("## KEY CONFIGURATION FILES\n\n")
+				firstHeader = false
+			}
+			fmt.Fprintf(&sb, "### %s\n```\n%s\n```\n\n", name, content)
 		}
 	}
 
@@ -99,9 +161,7 @@ Use clear headings (##), be concise but complete. Include all commands you can i
 
 	sb.WriteString(`---
 
-Now generate the CLAUDE.md file. Structure it with these sections (include only what's relevant):
-
-# CLAUDE.md
+Generate the CLAUDE.md now. Required sections (skip if not applicable):
 
 ## Project Overview
 ## Tech Stack
@@ -111,47 +171,43 @@ Now generate the CLAUDE.md file. Structure it with these sections (include only 
 ## Code Conventions
 ## Important Notes / Gotchas
 
-Be specific. Infer real commands from Makefile, package.json scripts, go.mod, etc.
-If README.md was provided, extract the most relevant dev workflow information from it.
+Use BUILD COMMANDS and KEY DEPENDENCIES verbatim where relevant — don't invent commands.
+Code Conventions should reflect what's actually visible in the code, not generic language defaults.
 `)
 
 	return sb.String()
 }
 
-// trimConfigFiles removes or truncates config files by descending priority until
-// the estimated prompt size fits within maxPromptBytes.
 func trimConfigFiles(ctx *Context) {
 	if ctx.Stack == nil {
 		return
 	}
-
-	// Low-priority files are dropped first.
 	dropOrder := []string{
 		"docker-compose.yaml", "docker-compose.yml", ".env.example",
 		"vite.config.ts", "vite.config.js",
 		"tailwind.config.ts", "tailwind.config.js",
 		"setup.py", "requirements.txt",
-		"README.md",
-		"Dockerfile",
-		"tsconfig.json",
+		"README.md", "Dockerfile", "tsconfig.json",
 	}
-
 	for estimatedSize(ctx) > maxPromptBytes && len(dropOrder) > 0 {
-		drop := dropOrder[0]
+		delete(ctx.Stack.ConfigFiles, dropOrder[0])
 		dropOrder = dropOrder[1:]
-		delete(ctx.Stack.ConfigFiles, drop)
 	}
 }
 
-// estimatedSize gives a rough byte count of what Build() would produce.
 func estimatedSize(ctx *Context) int {
-	total := 2000 // base prompt overhead
+	total := 3000
 	total += len(ctx.Tree.Render())
 	if ctx.Git.IsRepo {
 		total += len(ctx.Git.RecentCommits)
 	}
 	for _, content := range ctx.Stack.ConfigFiles {
-		total += len(content) + 50 // 50 for the header/fences
+		total += len(content) + 50
+	}
+	if ctx.Sigs != nil {
+		for _, l := range ctx.Sigs.Lines {
+			total += len(l) + 1
+		}
 	}
 	return total
 }

@@ -169,11 +169,20 @@ func generate(ts []target) error {
 	spin.Stop()
 	ui.Step("git", gitLabel(git))
 
+	spin = ui.NewSpinner("analysing project")
+	spin.Start()
+	meta := scanner.ScanMeta(root, tree.Entries, stack)
+	sigs := scanner.ScanSignatures(root, tree.Entries, stack)
+	spin.Stop()
+	ui.Step("meta", metaLabel(meta))
+
 	ctx := &prompt.Context{
 		ProjectName: filepath.Base(root),
 		Tree:        tree,
 		Stack:       stack,
 		Git:         git,
+		Meta:        meta,
+		Sigs:        sigs,
 	}
 	p := prompt.Build(ctx)
 
@@ -251,6 +260,23 @@ func generate(ts []target) error {
 	}
 	fmt.Println()
 	return nil
+}
+
+func metaLabel(m *scanner.ProjectMeta) string {
+	var parts []string
+	if m.RuntimeVersion != "" {
+		parts = append(parts, m.RuntimeVersion)
+	}
+	if m.License != "" {
+		parts = append(parts, m.License)
+	}
+	if m.HasTests {
+		parts = append(parts, "tests ✓")
+	}
+	if len(parts) == 0 {
+		return "done"
+	}
+	return strings.Join(parts, "  ")
 }
 
 func stackLabel(s *scanner.Stack) string {

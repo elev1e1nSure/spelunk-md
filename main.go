@@ -55,7 +55,7 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 		ui.KeySaved("API key saved to keyring")
 		if flagPath == "." && !flagDryRun {
-			fmt.Println("  Run again without --api-key to generate CLAUDE.md")
+			fmt.Println("Run again without --api-key to generate CLAUDE.md")
 			return nil
 		}
 	}

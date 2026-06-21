@@ -21,20 +21,20 @@ const (
 func init() { enableANSI() }
 
 func Header(name, path string) {
-	fmt.Printf("\n  %s%s%s  %s%s%s\n\n",
+	fmt.Printf("\n%s%s%s  %s%s%s\n\n",
 		bold+teal, name, reset,
 		faint, path, reset,
 	)
 }
 
-// Step prints "  ◆  label   value" with space-aligned columns, no dots.
+// Step prints "◆  label   value" with space-aligned columns, no dots.
 func Step(label, value string) {
 	const width = 8
 	pad := width - len(label)
 	if pad < 1 {
 		pad = 1
 	}
-	fmt.Printf("  %s◆%s  %s%s%s%s  %s%s%s\n",
+	fmt.Printf("%s◆%s  %s%s%s%s  %s%s%s\n",
 		teal, reset,
 		bold, label, reset,
 		strings.Repeat(" ", pad),
@@ -45,7 +45,7 @@ func Step(label, value string) {
 func Divider() { fmt.Println() }
 
 func Success(filename, meta string) {
-	fmt.Printf("\n  %s✓%s  %s%s%s  %s%s%s\n\n",
+	fmt.Printf("\n%s✓%s  %s%s%s  %s%s%s\n\n",
 		sage, reset,
 		bold, filename, reset,
 		faint, meta, reset,
@@ -53,15 +53,15 @@ func Success(filename, meta string) {
 }
 
 func Fail(msg string) {
-	fmt.Printf("\n  %s✗%s  %s\n\n", coral, reset, msg)
+	fmt.Printf("\n%s✗%s  %s\n\n", coral, reset, msg)
 }
 
 func KeySaved(msg string) {
-	fmt.Printf("\n  %s●%s  %s%s%s\n\n", teal, reset, bold, msg, reset)
+	fmt.Printf("\n%s●%s  %s%s%s\n\n", teal, reset, bold, msg, reset)
 }
 
 func DryRun(prompt string) {
-	fmt.Printf("  %sdry run%s\n\n", faint, reset)
+	fmt.Printf("%sdry run%s\n\n", faint, reset)
 	fmt.Println(prompt)
 	fmt.Println()
 }
@@ -87,7 +87,7 @@ func (s *Spinner) Start() {
 				fmt.Printf("\r\033[K")
 				return
 			default:
-				fmt.Printf("\r  %s%s%s  %s%s%s",
+				fmt.Printf("\r%s%s%s  %s%s%s",
 					lavender, spinFrames[i%len(spinFrames)], reset,
 					faint, s.label, reset,
 				)

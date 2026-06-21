@@ -5,6 +5,10 @@ spelunk
 spelunk.exe
 spelunk-md
 spelunk-md.exe
-CLAUDE.md
+
+# Build & temp artifacts
 spelunk-md.exe~
+
+# Generated documentation
+CLAUDE.md
 plan.md

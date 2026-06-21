@@ -27,7 +27,6 @@ func Header(name, path string) {
 	)
 }
 
-// Step prints "◆  label   value" with space-aligned columns, no dots.
 func Step(label, value string) {
 	const width = 8
 	pad := width - len(label)
@@ -45,7 +44,7 @@ func Step(label, value string) {
 func Divider() { fmt.Println() }
 
 func Success(filename, meta string) {
-	fmt.Printf("%s✓%s  %s%s%s  %s%s%s\n\n",
+	fmt.Printf("%s✓%s  %s%-20s%s  %s%s%s\n",
 		sage, reset,
 		bold, filename, reset,
 		faint, meta, reset,
@@ -53,7 +52,7 @@ func Success(filename, meta string) {
 }
 
 func Fail(msg string) {
-	fmt.Printf("%s✗%s  %s\n\n", coral, reset, msg)
+	fmt.Printf("%s✗%s  %s\n", coral, reset, msg)
 }
 
 func KeySaved(msg string) {
@@ -72,6 +71,46 @@ func Confirm(filename string) {
 func DryRun(prompt string) {
 	fmt.Printf("%sdry run%s\n\n", faint, reset)
 	fmt.Println(prompt)
+	fmt.Println()
+}
+
+// HelpTarget describes one subcommand entry for the help screen.
+type HelpTarget struct {
+	Cmd   string
+	File  string
+	Label string
+}
+
+func Help(version string, targets []HelpTarget) {
+	fmt.Printf("\n%sspelunk-md%s  %s%s%s\n", bold+teal, reset, faint, version, reset)
+	fmt.Printf("%sGenerates context files for AI coding tools via OpenRouter.%s\n\n", faint, reset)
+
+	for _, t := range targets {
+		fmt.Printf("  %s%-10s%s  %s%-20s%s  %s%s%s\n",
+			bold+chalk, t.Cmd, reset,
+			teal, t.File, reset,
+			faint, t.Label, reset,
+		)
+	}
+	fmt.Printf("  %s%-10s%s  %s%-20s%s  %sall targets, parallel%s\n\n",
+		bold+chalk, "all", reset,
+		teal, "———", reset,
+		faint, reset,
+	)
+
+	flags := [][2]string{
+		{"--api-key <key>", "save OpenRouter API key to keyring"},
+		{"--api-key clear", "remove saved key"},
+		{"--model <model>", "override model  (default: deepseek/deepseek-v4-flash)"},
+		{"--path <path>", "project root  (default: .)"},
+		{"--dry-run", "print prompt, no API call"},
+		{"--force", "skip overwrite confirmation"},
+		{"--timeout <sec>", "request timeout  (default: 120s)"},
+		{"--version", "show version"},
+	}
+	for _, f := range flags {
+		fmt.Printf("  %s%-24s%s  %s%s%s\n", chalk, f[0], reset, faint, f[1], reset)
+	}
 	fmt.Println()
 }
 

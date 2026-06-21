@@ -88,6 +88,25 @@ func main() {
 		},
 	})
 
+	customCmd := &cobra.Command{
+		Use:           "custom",
+		Short:         "Generate to any file path you choose",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			out, _ := cmd.Flags().GetString("output")
+			if out == "" {
+				out = ui.AskOutput()
+			}
+			if out == "" {
+				return fmt.Errorf("output path required")
+			}
+			return generate([]target{{cmd: "custom", file: out, label: "custom"}})
+		},
+	}
+	customCmd.Flags().String("output", "", "Output file path (e.g. .clinerules, docs/AI.md)")
+	root.AddCommand(customCmd)
+
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -175,7 +194,10 @@ func generate(ts []target) error {
 	}
 	var work []resolved
 	for _, t := range ts {
-		outPath := filepath.Join(root, t.file)
+		outPath := t.file
+		if !filepath.IsAbs(t.file) {
+			outPath = filepath.Join(root, filepath.FromSlash(t.file))
+		}
 		if !flagForce {
 			if _, err := os.Stat(outPath); err == nil {
 				ui.Confirm(t.file)

@@ -68,6 +68,19 @@ func Confirm(filename string) {
 	)
 }
 
+// AskOutput prints a styled prompt and reads a file path from stdin.
+func AskOutput() string {
+	fmt.Printf("\n%s◆%s  %soutput%s  %sfile path:%s ",
+		teal, reset,
+		bold, reset,
+		faint, reset,
+	)
+	var input string
+	fmt.Scanln(&input)
+	fmt.Println()
+	return strings.TrimSpace(input)
+}
+
 func DryRun(prompt string) {
 	fmt.Printf("%sdry run%s\n\n", faint, reset)
 	fmt.Println(prompt)
@@ -92,9 +105,14 @@ func Help(version string, targets []HelpTarget) {
 			faint, t.Label, reset,
 		)
 	}
-	fmt.Printf("  %s%-10s%s  %s%-20s%s  %sall targets, parallel%s\n\n",
+	fmt.Printf("  %s%-10s%s  %s%-20s%s  %sall targets, parallel%s\n",
 		bold+chalk, "all", reset,
 		teal, "———", reset,
+		faint, reset,
+	)
+	fmt.Printf("  %s%-10s%s  %s%-20s%s  %sany file, any path%s\n\n",
+		bold+chalk, "custom", reset,
+		teal, "<your file>", reset,
 		faint, reset,
 	)
 

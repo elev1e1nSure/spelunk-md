@@ -1,6 +1,7 @@
 set shell := ["sh", "-cu"]
 
-bin := if os() == "windows" { "spelunk-md.exe" } else { "spelunk-md" }
+bin     := if os() == "windows" { "spelunk-md.exe" } else { "spelunk-md" }
+version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
 
 # Показать доступные команды
 default:
@@ -15,13 +16,13 @@ default:
 # Компилировать бинарник
 build:
     @printf '\033[38;5;116m◆\033[0m  \033[1mBuilding\033[0m  \033[2m→ go build -o {{bin}} .\033[0m\n'
-    @go build -o {{bin}} . && \
-      printf '\033[38;5;114m✓\033[0m  \033[1m{{bin}}\033[0m  \033[2mready\033[0m\n'
+    @go build -ldflags "-X main.version={{version}}" -o {{bin}} . && \
+      printf '\033[38;5;114m✓\033[0m  \033[1m{{bin}}\033[0m  \033[2mready (%s)\033[0m\n' "{{version}}"
 
 # Установить в $GOPATH/bin
 install:
     @printf '\033[38;5;116m◆\033[0m  \033[1mInstalling\033[0m  \033[2m→ go install .\033[0m\n'
-    @go install . && \
+    @go install -ldflags "-X main.version={{version}}" . && \
       printf '\033[38;5;114m✓\033[0m  installed to \033[2m$(go env GOPATH)/bin\033[0m\n'
 
 # go vet + компиляция

@@ -48,6 +48,7 @@ func goSignatures(root string, entries []string) []string {
 		if err != nil {
 			continue
 		}
+		var fileSigs []string
 		sc := bufio.NewScanner(f)
 		for sc.Scan() {
 			line := strings.TrimSpace(sc.Text())
@@ -55,15 +56,26 @@ func goSignatures(root string, entries []string) []string {
 				if len(line) > 120 {
 					line = line[:120] + "..."
 				}
-				result = append(result, line)
-				total += len(line)
-				if total > maxSigBytes {
-					f.Close()
-					return result
-				}
+				fileSigs = append(fileSigs, line)
 			}
 		}
 		f.Close()
+		if len(fileSigs) == 0 {
+			continue
+		}
+		header := "// " + filepath.ToSlash(e)
+		result = append(result, header)
+		total += len(header)
+		if total > maxSigBytes {
+			return result
+		}
+		for _, line := range fileSigs {
+			result = append(result, line)
+			total += len(line)
+			if total > maxSigBytes {
+				return result
+			}
+		}
 	}
 	return result
 }
@@ -112,6 +124,7 @@ func tsSignatures(root string, entries []string) []string {
 		if err != nil {
 			continue
 		}
+		var fileSigs []string
 		sc := bufio.NewScanner(f)
 		for sc.Scan() {
 			line := strings.TrimSpace(sc.Text())
@@ -120,17 +133,28 @@ func tsSignatures(root string, entries []string) []string {
 					if len(line) > 120 {
 						line = line[:120] + "..."
 					}
-					result = append(result, line)
-					total += len(line)
+					fileSigs = append(fileSigs, line)
 					break
 				}
 			}
+		}
+		f.Close()
+		if len(fileSigs) == 0 {
+			continue
+		}
+		header := "// " + filepath.ToSlash(e)
+		result = append(result, header)
+		total += len(header)
+		if total > maxSigBytes {
+			return result
+		}
+		for _, line := range fileSigs {
+			result = append(result, line)
+			total += len(line)
 			if total > maxSigBytes {
-				f.Close()
 				return result
 			}
 		}
-		f.Close()
 	}
 	return result
 }
@@ -146,6 +170,7 @@ func pySignatures(root string, entries []string) []string {
 		if err != nil {
 			continue
 		}
+		var fileSigs []string
 		sc := bufio.NewScanner(f)
 		for sc.Scan() {
 			line := sc.Text()
@@ -155,15 +180,26 @@ func pySignatures(root string, entries []string) []string {
 				if len(sig) > 120 {
 					sig = sig[:120] + "..."
 				}
-				result = append(result, sig)
-				total += len(sig)
-				if total > maxSigBytes {
-					f.Close()
-					return result
-				}
+				fileSigs = append(fileSigs, sig)
 			}
 		}
 		f.Close()
+		if len(fileSigs) == 0 {
+			continue
+		}
+		header := "# " + filepath.ToSlash(e)
+		result = append(result, header)
+		total += len(header)
+		if total > maxSigBytes {
+			return result
+		}
+		for _, sig := range fileSigs {
+			result = append(result, sig)
+			total += len(sig)
+			if total > maxSigBytes {
+				return result
+			}
+		}
 	}
 	return result
 }

@@ -175,6 +175,13 @@ Generate the CLAUDE.md now. Required sections (skip if not applicable):
 
 Use BUILD COMMANDS and KEY DEPENDENCIES verbatim where relevant — don't invent commands.
 Code Conventions should reflect what's actually visible in the code, not generic language defaults.
+
+Before outputting, verify the following and fix any mismatches:
+- Project Structure must match FILE STRUCTURE exactly (same directories, same files, no invented paths).
+- Do not claim all code is in package main if FILE STRUCTURE shows packages like config/, generator/, prompt/, scanner/, ui/.
+- Mention only commands that exist in BUILD COMMANDS.
+- Mention only dependencies that exist in KEY DEPENDENCIES or KEY SOURCE FILES.
+- Architecture & Key Decisions must be supported by CODE SIGNATURES and KEY SOURCE FILES, not guessed.
 `)
 
 	return sb.String()

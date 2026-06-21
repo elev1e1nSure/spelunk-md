@@ -21,7 +21,7 @@ const (
 func init() { enableANSI() }
 
 func Header(name, path string) {
-	fmt.Printf("%s%s%s | %s%s%s\n",
+	fmt.Printf("\n%s%s%s | %s%s%s\n",
 		bold+teal, name, reset,
 		faint, path, reset,
 	)

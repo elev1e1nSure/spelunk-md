@@ -6,6 +6,7 @@
 
 [![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
 [![OpenRouter](https://img.shields.io/badge/OpenRouter-powered-7C3AED?style=flat-square&logo=openai&logoColor=white)](https://openrouter.ai)
+[![CI](https://img.shields.io/github/actions/workflow/status/elev1e1n/spelunk-md/ci.yml?branch=main&style=flat-square)](https://github.com/elev1e1n/spelunk-md/actions)
 [![License MIT](https://img.shields.io/github/license/elev1e1n/spelunk-md?style=flat-square)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/elev1e1n/spelunk-md?style=flat-square&color=22c55e)](https://github.com/elev1e1n/spelunk-md/releases)
 

@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/elev1e1n/claude-md-gen/config"
 	"github.com/elev1e1n/claude-md-gen/generator"
 	"github.com/elev1e1n/claude-md-gen/prompt"
 	"github.com/elev1e1n/claude-md-gen/scanner"
+	"github.com/elev1e1n/claude-md-gen/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -22,11 +24,10 @@ var (
 
 func main() {
 	root := &cobra.Command{
-		Use:   "claude-md-gen",
+		Use:   "spelunk",
 		Short: "Generate CLAUDE.md for any codebase using AI",
-		Long: `Scans your project (files, stack, git history) and generates
-a tailored CLAUDE.md using an AI model via OpenRouter.`,
-		RunE: run,
+		Long:  `Scans your project (files, stack, git history) and generates a tailored CLAUDE.md via OpenRouter.`,
+		RunE:  run,
 	}
 
 	root.Flags().StringVar(&flagAPIKey, "api-key", "", `OpenRouter API key. Use "clear" to remove saved key`)
@@ -41,66 +42,56 @@ a tailored CLAUDE.md using an AI model via OpenRouter.`,
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	// Handle api-key flag first
 	if flagAPIKey != "" {
 		if flagAPIKey == "clear" {
 			if err := config.DeleteAPIKey(); err != nil {
 				return err
 			}
-			fmt.Println("API key removed.")
+			ui.KeySaved("API key removed from keyring")
 			return nil
 		}
 		if err := config.SetAPIKey(flagAPIKey); err != nil {
 			return err
 		}
-		fmt.Println("API key saved to system keyring.")
-		// Continue to generate unless that's all they wanted
-		// (if no other meaningful context, just exit)
+		ui.KeySaved("API key saved to keyring")
 		if flagPath == "." && !flagDryRun {
-			fmt.Println("Run again without --api-key to generate CLAUDE.md")
+			fmt.Println("  Run again without --api-key to generate CLAUDE.md")
 			return nil
 		}
 	}
 
-	// Resolve project root
 	root, err := filepath.Abs(flagPath)
 	if err != nil {
 		return fmt.Errorf("invalid path: %w", err)
 	}
-
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		return fmt.Errorf("path does not exist: %s", root)
 	}
 
 	projectName := filepath.Base(root)
-	fmt.Printf("→ Scanning %s\n", root)
+	ui.Header("spelunk", root)
 
-	// Scan
-	fmt.Println("  [1/3] Reading files...")
+	spin := ui.NewSpinner("reading files")
+	spin.Start()
 	tree, err := scanner.ScanFiles(root)
+	spin.Stop()
 	if err != nil {
 		return err
 	}
-	fmt.Printf("        found %d files\n", len(tree.Entries))
+	ui.Step("files", fmt.Sprintf("%d", len(tree.Entries)))
 
-	fmt.Println("  [2/3] Detecting stack...")
+	spin = ui.NewSpinner("detecting stack")
+	spin.Start()
 	stack := scanner.DetectStack(root, tree.Entries)
-	if len(stack.Languages) > 0 {
-		fmt.Printf("        languages: %v\n", stack.Languages)
-	}
-	if len(stack.Frameworks) > 0 {
-		fmt.Printf("        frameworks: %v\n", stack.Frameworks)
-	}
+	spin.Stop()
+	ui.Step("stack", stackLabel(stack))
 
-	fmt.Println("  [3/3] Reading git history...")
+	spin = ui.NewSpinner("reading git")
+	spin.Start()
 	git := scanner.ScanGit(root)
-	if git.IsRepo {
-		fmt.Printf("        branch: %s\n", git.Branch)
-	} else {
-		fmt.Println("        (not a git repo)")
-	}
+	spin.Stop()
+	ui.Step("git", gitLabel(git))
 
-	// Build prompt
 	ctx := &prompt.Context{
 		ProjectName: projectName,
 		Tree:        tree,
@@ -110,35 +101,57 @@ func run(cmd *cobra.Command, args []string) error {
 	p := prompt.Build(ctx)
 
 	if flagDryRun {
-		fmt.Println("\n─── DRY RUN PROMPT ───────────────────────────────────────")
-		fmt.Println(p)
-		fmt.Println("──────────────────────────────────────────────────────────")
+		ui.DryRun(p)
 		return nil
 	}
 
-	// Get API key
 	apiKey, err := config.GetAPIKey()
 	if err != nil {
 		return err
 	}
 
-	// Generate
-	fmt.Printf("\n→ Calling %s via OpenRouter...\n", flagModel)
+	ui.Divider()
+	spin = ui.NewSpinner(flagModel)
+	spin.Start()
 	content, err := generator.Generate(apiKey, flagModel, p)
+	spin.Stop()
 	if err != nil {
 		return err
 	}
 
-	// Write output
 	outputPath := flagOutput
 	if !filepath.IsAbs(outputPath) {
 		outputPath = filepath.Join(root, outputPath)
 	}
-
 	if err := generator.WriteFile(outputPath, content); err != nil {
 		return err
 	}
 
-	fmt.Printf("✓ CLAUDE.md written to %s\n", outputPath)
+	size := fmt.Sprintf("%.1f KB", float64(len(content))/1024)
+	ui.Success(filepath.Base(outputPath), outputPath+"  "+size)
 	return nil
+}
+
+func stackLabel(s *scanner.Stack) string {
+	var parts []string
+	parts = append(parts, s.Languages...)
+	parts = append(parts, s.Frameworks...)
+	if len(parts) == 0 {
+		return "unknown"
+	}
+	return strings.Join(parts, "  ")
+}
+
+func gitLabel(g *scanner.GitInfo) string {
+	if !g.IsRepo {
+		return "not a git repo"
+	}
+	commitCount := 0
+	if g.RecentCommits != "" {
+		commitCount = len(strings.Split(strings.TrimSpace(g.RecentCommits), "\n"))
+	}
+	if commitCount > 0 {
+		return fmt.Sprintf("%s  (%d commits)", g.Branch, commitCount)
+	}
+	return g.Branch
 }

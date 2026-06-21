@@ -2,6 +2,8 @@ package prompt
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/elev1e1n/spelunk-md/scanner"
@@ -210,4 +212,79 @@ func estimatedSize(ctx *Context) int {
 		}
 	}
 	return total
+}
+
+// BuildIncremental constructs the prompt for updating an existing file based on changed files.
+func BuildIncremental(ctx *Context, currentContent string, changedFiles []string) string {
+	var sb strings.Builder
+
+	sb.WriteString(`You are an expert software engineer updating an existing AI context file (CLAUDE.md / .cursorrules / etc.).
+
+Your task is to update the file content based on the changes in the codebase.
+Only modify or add sections that are affected by the changes (e.g. tech stack, key dependencies, build commands, architecture, or conventions).
+Do not rewrite unrelated sections. Keep the existing formatting and style intact where possible.
+
+Output ONLY the complete, updated file content. No preamble, no explanation, no code fences around the whole document.
+
+---
+
+`)
+
+	sb.WriteString("## CURRENT CONTENT\n")
+	sb.WriteString(currentContent)
+	sb.WriteString("\n\n---\n\n")
+
+	sb.WriteString("## CHANGES DETECTED\n")
+	sb.WriteString("The following files have changed since the last snapshot:\n\n")
+
+	for _, f := range changedFiles {
+		sb.WriteString(fmt.Sprintf("### File: %s\n", f))
+
+		// Check if the file exists
+		fullPath := filepath.Join(ctx.Tree.Root, filepath.FromSlash(f))
+		info, err := os.Stat(fullPath)
+		if os.IsNotExist(err) {
+			sb.WriteString("Status: Deleted / Removed\n\n")
+			continue
+		}
+
+		if info.IsDir() {
+			sb.WriteString("Status: Directory modified\n\n")
+			continue
+		}
+
+		// Check if it's a config file we read
+		if ctx.Stack != nil {
+			if content, ok := ctx.Stack.ConfigFiles[f]; ok {
+				sb.WriteString("New Content:\n```\n")
+				sb.WriteString(content)
+				sb.WriteString("\n```\n\n")
+				continue
+			}
+		}
+
+		// Check if it's the user context file (.spelunk/context.md)
+		if filepath.ToSlash(f) == ".spelunk/context.md" {
+			if ctx.Meta != nil && ctx.Meta.UserContext != "" {
+				sb.WriteString("New User Context:\n```\n")
+				sb.WriteString(ctx.Meta.UserContext)
+				sb.WriteString("\n```\n\n")
+				continue
+			}
+		}
+
+		// Otherwise check if we have signatures for it
+		if sigs := scanner.ScanSignatures(ctx.Tree.Root, []string{f}, ctx.Stack); sigs != nil && len(sigs.Lines) > 0 {
+			sb.WriteString(fmt.Sprintf("New Signatures (%s):\n```\n", sigs.Lang))
+			for _, line := range sigs.Lines {
+				sb.WriteString(line + "\n")
+			}
+			sb.WriteString("```\n\n")
+			continue
+		}
+
+		sb.WriteString("Status: Modified\n\n")
+	}
+
+	return sb.String()
 }

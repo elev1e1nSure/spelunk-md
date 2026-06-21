@@ -26,7 +26,7 @@ type ProjectMeta struct {
 
 func ScanMeta(root string, entries []string, stack *Stack) *ProjectMeta {
 	m := &ProjectMeta{}
-	m.RuntimeVersion = detectRuntime(root, stack)
+	m.RuntimeVersion = stack.RuntimeVersion
 	m.License = detectLicense(root)
 	m.HasTests = detectTests(entries)
 	m.CI = detectCI(entries)

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/elev1e1n/spelunk-md/config"
 	"github.com/elev1e1n/spelunk-md/generator"
@@ -107,6 +108,16 @@ func main() {
 	customCmd.Flags().String("output", "", "Output file path (e.g. .clinerules, docs/AI.md)")
 	root.AddCommand(customCmd)
 
+	root.AddCommand(&cobra.Command{
+		Use:           "update",
+		Short:         "Incremental update based on git changes",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return generateIncremental()
+		},
+	})
+
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -159,7 +170,7 @@ func generate(ts []target) error {
 
 	spin = ui.NewSpinner("detecting stack")
 	spin.Start()
-	stack := scanner.DetectStack(root, tree.Entries)
+	stack := scanner.DetectStack(root, tree.Entries, nil)
 	spin.Stop()
 	ui.Step("stack", stackLabel(stack))
 
@@ -257,6 +268,18 @@ func generate(ts []target) error {
 		}
 		size := fmt.Sprintf("%.1f KB", float64(len(res.content))/1024)
 		ui.Success(res.r.file, res.r.outPath+"  "+size)
+
+		if len(ts) == 1 {
+			head, err := scanner.GetHeadCommit(root)
+			if err == nil {
+				snap := &scanner.Snapshot{
+					Commit:     head,
+					AnalyzedAt: time.Now(),
+					Output:     res.r.file,
+				}
+				_ = scanner.WriteSnapshot(root, snap)
+			}
+		}
 	}
 	fmt.Println()
 	return nil
@@ -264,9 +287,6 @@ func generate(ts []target) error {
 
 func metaLabel(m *scanner.ProjectMeta) string {
 	var parts []string
-	if m.RuntimeVersion != "" {
-		parts = append(parts, m.RuntimeVersion)
-	}
 	if m.License != "" {
 		parts = append(parts, m.License)
 	}
@@ -280,7 +300,15 @@ func metaLabel(m *scanner.ProjectMeta) string {
 }
 
 func stackLabel(s *scanner.Stack) string {
-	parts := append(s.Languages, s.Frameworks...)
+	var langs []string
+	for _, lang := range s.Languages {
+		if s.RuntimeVersion != "" && strings.HasPrefix(strings.ToLower(s.RuntimeVersion), strings.ToLower(lang)+" ") {
+			langs = append(langs, s.RuntimeVersion)
+		} else {
+			langs = append(langs, lang)
+		}
+	}
+	parts := append(langs, s.Frameworks...)
 	if len(parts) == 0 {
 		return "unknown"
 	}
@@ -299,4 +327,151 @@ func gitLabel(g *scanner.GitInfo) string {
 		return fmt.Sprintf("%s  (%d commits)", g.Branch, commitCount)
 	}
 	return g.Branch
+}
+
+func generateIncremental() error {
+	if flagAPIKey != "" {
+		if err := handleAPIKey(); err != nil {
+			return err
+		}
+		if flagPath == "." && !flagDryRun {
+			return nil
+		}
+	}
+
+	root, err := filepath.Abs(flagPath)
+	if err != nil {
+		return fmt.Errorf("invalid path: %w", err)
+	}
+	if _, err := os.Stat(root); os.IsNotExist(err) {
+		return fmt.Errorf("path does not exist: %s", root)
+	}
+
+	// Read snapshot
+	snap, err := scanner.ReadSnapshot(root)
+	if err != nil {
+		// Fallback: full analysis (claude target as default)
+		return generate([]target{{"claude", "CLAUDE.md", "Claude Code"}})
+	}
+
+	// Resolve output path
+	outPath := snap.Output
+	if !filepath.IsAbs(outPath) {
+		outPath = filepath.Join(root, filepath.FromSlash(snap.Output))
+	}
+
+	// Verify output file exists
+	if _, err := os.Stat(outPath); os.IsNotExist(err) {
+		return generate([]target{{"claude", "CLAUDE.md", "Claude Code"}})
+	}
+
+	// Read current content of output file
+	currentBytes, err := os.ReadFile(outPath)
+	if err != nil {
+		return generate([]target{{"claude", "CLAUDE.md", "Claude Code"}})
+	}
+	currentContent := string(currentBytes)
+
+	// Check git repo
+	git := scanner.ScanGit(root)
+	if !git.IsRepo {
+		return generate([]target{{"claude", "CLAUDE.md", "Claude Code"}})
+	}
+
+	headCommit, err := scanner.GetHeadCommit(root)
+	if err != nil {
+		return generate([]target{{"claude", "CLAUDE.md", "Claude Code"}})
+	}
+
+	// Get changed files
+	changedFiles, err := scanner.DiffFiles(root, snap.Commit)
+	if err != nil {
+		return generate([]target{{"claude", "CLAUDE.md", "Claude Code"}})
+	}
+
+	// If no changes, exit early
+	if len(changedFiles) == 0 {
+		ui.Header("spelunk-md (incremental)", root)
+		ui.Step("git", gitLabel(git))
+		fmt.Println("No changes detected since last snapshot.")
+		return nil
+	}
+
+	ui.Header("spelunk-md (incremental)", root)
+	ui.Step("git", gitLabel(git))
+	ui.Step("changes", fmt.Sprintf("%d files modified", len(changedFiles)))
+
+	spin := ui.NewSpinner("reading files")
+	spin.Start()
+	tree, err := scanner.ScanFiles(root)
+	spin.Stop()
+	if err != nil {
+		return err
+	}
+
+	spin = ui.NewSpinner("detecting stack")
+	spin.Start()
+	stack := scanner.DetectStack(root, tree.Entries, changedFiles)
+	spin.Stop()
+	ui.Step("stack", stackLabel(stack))
+
+	spin = ui.NewSpinner("analysing project")
+	spin.Start()
+	meta := scanner.ScanMeta(root, tree.Entries, stack)
+	sigs := scanner.ScanSignatures(root, changedFiles, stack)
+	spin.Stop()
+	ui.Step("meta", metaLabel(meta))
+
+	ctx := &prompt.Context{
+		ProjectName: filepath.Base(root),
+		Tree:        tree,
+		Stack:       stack,
+		Git:         git,
+		Meta:        meta,
+		Sigs:        sigs,
+	}
+
+	p := prompt.BuildIncremental(ctx, currentContent, changedFiles)
+
+	if flagDryRun {
+		ui.DryRun(p)
+		return nil
+	}
+
+	apiKey, err := config.GetAPIKey()
+	if err != nil {
+		return err
+	}
+
+	ui.Divider()
+	spin = ui.NewModelSpinner(flagModel)
+	spin.Start()
+	newContent, err := generator.Generate(apiKey, flagModel, p, flagTimeout)
+	spin.Stop()
+
+	if err != nil {
+		ui.Fail(snap.Output + ": " + err.Error())
+		return err
+	}
+
+	if err := generator.WriteFile(outPath, newContent); err != nil {
+		ui.Fail(snap.Output + ": " + err.Error())
+		return err
+	}
+
+	size := fmt.Sprintf("%.1f KB", float64(len(newContent))/1024)
+	ui.Success(snap.Output, outPath+"  "+size)
+
+	// Update snapshot
+	newSnap := &scanner.Snapshot{
+		Commit:     headCommit,
+		AnalyzedAt: time.Now(),
+		Output:     snap.Output,
+	}
+	if err := scanner.WriteSnapshot(root, newSnap); err != nil {
+		ui.Fail("failed to write snapshot: " + err.Error())
+	}
+
+	fmt.Println()
+	return nil
 }

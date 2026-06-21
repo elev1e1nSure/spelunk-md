@@ -10,10 +10,11 @@ import (
 
 // Stack holds detected technologies and key config files content.
 type Stack struct {
-	Languages   []string
-	Frameworks  []string
-	Tools       []string
-	ConfigFiles map[string]string // filename -> content (trimmed)
+	Languages      []string
+	Frameworks     []string
+	Tools          []string
+	ConfigFiles    map[string]string // filename -> content (trimmed)
+	RuntimeVersion string            // e.g. "Go 1.26.3"
 }
 
 type packageJSON struct {
@@ -24,7 +25,7 @@ type packageJSON struct {
 }
 
 // DetectStack inspects the project root and file list.
-func DetectStack(root string, entries []string) *Stack {
+func DetectStack(root string, entries []string, changedFiles []string) *Stack {
 	s := &Stack{
 		ConfigFiles: make(map[string]string),
 	}
@@ -96,7 +97,21 @@ func DetectStack(root string, entries []string) *Stack {
 		"README.md",
 	}
 
+	var changedMap map[string]bool
+	if changedFiles != nil {
+		changedMap = make(map[string]bool)
+		for _, f := range changedFiles {
+			changedMap[filepath.ToSlash(filepath.Clean(f))] = true
+		}
+	}
+
 	for _, target := range configTargets {
+		if changedFiles != nil {
+			targetSlash := filepath.ToSlash(filepath.Clean(target))
+			if !changedMap[targetSlash] {
+				continue
+			}
+		}
 		fullPath := filepath.Join(root, target)
 		data, err := os.ReadFile(fullPath)
 		if err != nil {
@@ -193,6 +208,8 @@ func DetectStack(root string, entries []string) *Stack {
 			break
 		}
 	}
+
+	s.RuntimeVersion = detectRuntime(root, s)
 
 	return s
 }

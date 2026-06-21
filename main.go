@@ -111,7 +111,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	ui.Divider()
-	spin = ui.NewSpinner(flagModel)
+	spin = ui.NewModelSpinner(flagModel)
 	spin.Start()
 	content, err := generator.Generate(apiKey, flagModel, p)
 	spin.Stop()

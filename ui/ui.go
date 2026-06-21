@@ -67,15 +67,29 @@ func DryRun(prompt string) {
 }
 
 type Spinner struct {
-	label string
-	stop  chan struct{}
-	done  chan struct{}
+	label   string
+	isModel bool
+	stop    chan struct{}
+	done    chan struct{}
 }
 
 var spinFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 func NewSpinner(label string) *Spinner {
 	return &Spinner{label: label, stop: make(chan struct{}), done: make(chan struct{})}
+}
+
+func NewModelSpinner(model string) *Spinner {
+	displayName := model
+	if idx := strings.LastIndex(model, "/"); idx != -1 {
+		displayName = model[idx+1:]
+	}
+	return &Spinner{
+		label:   displayName,
+		isModel: true,
+		stop:    make(chan struct{}),
+		done:    make(chan struct{}),
+	}
 }
 
 func (s *Spinner) Start() {
@@ -87,10 +101,18 @@ func (s *Spinner) Start() {
 				fmt.Printf("\r\033[K")
 				return
 			default:
-				fmt.Printf("\r%s%s%s  %s%s%s",
-					lavender, spinFrames[i%len(spinFrames)], reset,
-					faint, s.label, reset,
-				)
+				if s.isModel {
+					fmt.Printf("\r%s%s%s  %s%s%s  %s%s%s",
+						lavender, spinFrames[i%len(spinFrames)], reset,
+						chalk, s.label, reset,
+						faint, "thinking", reset,
+					)
+				} else {
+					fmt.Printf("\r%s%s%s  %s%s%s",
+						lavender, spinFrames[i%len(spinFrames)], reset,
+						faint, s.label, reset,
+					)
+				}
 				time.Sleep(80 * time.Millisecond)
 			}
 		}

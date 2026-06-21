@@ -7,6 +7,10 @@ import (
 	"github.com/elev1e1n/spelunk-md/scanner"
 )
 
+// maxPromptBytes caps the total prompt size to stay within model context limits.
+// ~80k chars ≈ 20k tokens, comfortable for any OpenRouter model.
+const maxPromptBytes = 80_000
+
 // Context holds all collected project data.
 type Context struct {
 	ProjectName string
@@ -16,7 +20,10 @@ type Context struct {
 }
 
 // Build constructs the full prompt for the LLM.
+// Config files are trimmed by priority if the total would exceed maxPromptBytes.
 func Build(ctx *Context) string {
+	trimConfigFiles(ctx)
+
 	var sb strings.Builder
 
 	sb.WriteString(`You are an expert software engineer tasked with generating a CLAUDE.md file.
@@ -38,15 +45,12 @@ Use clear headings (##), be concise but complete. Include all commands you can i
 
 `)
 
-	// Project identity
 	sb.WriteString(fmt.Sprintf("## PROJECT NAME\n%s\n\n", ctx.ProjectName))
 
-	// Remote URL if available
 	if ctx.Git.IsRepo && ctx.Git.RemoteURL != "" {
 		sb.WriteString(fmt.Sprintf("## REPOSITORY\n%s\n\n", ctx.Git.RemoteURL))
 	}
 
-	// Stack
 	if ctx.Stack != nil {
 		if len(ctx.Stack.Languages) > 0 {
 			sb.WriteString(fmt.Sprintf("## LANGUAGES\n%s\n\n", strings.Join(ctx.Stack.Languages, ", ")))
@@ -59,15 +63,16 @@ Use clear headings (##), be concise but complete. Include all commands you can i
 		}
 	}
 
-	// File tree
 	sb.WriteString("## FILE STRUCTURE\n```\n")
 	sb.WriteString(ctx.Tree.Render())
 	sb.WriteString("```\n\n")
 
-	// Key config files
 	if ctx.Stack != nil && len(ctx.Stack.ConfigFiles) > 0 {
 		sb.WriteString("## KEY CONFIGURATION FILES\n\n")
-		priority := []string{"go.mod", "package.json", "Cargo.toml", "pyproject.toml", "requirements.txt", "Makefile", "justfile", "Dockerfile", "docker-compose.yml", "tsconfig.json", "README.md"}
+		priority := []string{
+			"go.mod", "package.json", "Cargo.toml", "pyproject.toml", "requirements.txt",
+			"Makefile", "justfile", "Dockerfile", "docker-compose.yml", "tsconfig.json", "README.md",
+		}
 		printed := map[string]bool{}
 
 		for _, name := range priority {
@@ -86,7 +91,6 @@ Use clear headings (##), be concise but complete. Include all commands you can i
 		}
 	}
 
-	// Git history
 	if ctx.Git.IsRepo && ctx.Git.RecentCommits != "" {
 		sb.WriteString("## RECENT GIT HISTORY (last 30 commits)\n```\n")
 		sb.WriteString(ctx.Git.RecentCommits)
@@ -101,7 +105,7 @@ Now generate the CLAUDE.md file. Structure it with these sections (include only 
 
 ## Project Overview
 ## Tech Stack
-## Project Structure  
+## Project Structure
 ## Development Commands
 ## Architecture & Key Decisions
 ## Code Conventions
@@ -112,4 +116,42 @@ If README.md was provided, extract the most relevant dev workflow information fr
 `)
 
 	return sb.String()
+}
+
+// trimConfigFiles removes or truncates config files by descending priority until
+// the estimated prompt size fits within maxPromptBytes.
+func trimConfigFiles(ctx *Context) {
+	if ctx.Stack == nil {
+		return
+	}
+
+	// Low-priority files are dropped first.
+	dropOrder := []string{
+		"docker-compose.yaml", "docker-compose.yml", ".env.example",
+		"vite.config.ts", "vite.config.js",
+		"tailwind.config.ts", "tailwind.config.js",
+		"setup.py", "requirements.txt",
+		"README.md",
+		"Dockerfile",
+		"tsconfig.json",
+	}
+
+	for estimatedSize(ctx) > maxPromptBytes && len(dropOrder) > 0 {
+		drop := dropOrder[0]
+		dropOrder = dropOrder[1:]
+		delete(ctx.Stack.ConfigFiles, drop)
+	}
+}
+
+// estimatedSize gives a rough byte count of what Build() would produce.
+func estimatedSize(ctx *Context) int {
+	total := 2000 // base prompt overhead
+	total += len(ctx.Tree.Render())
+	if ctx.Git.IsRepo {
+		total += len(ctx.Git.RecentCommits)
+	}
+	for _, content := range ctx.Stack.ConfigFiles {
+		total += len(content) + 50 // 50 for the header/fences
+	}
+	return total
 }

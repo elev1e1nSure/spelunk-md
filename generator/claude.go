@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -33,8 +34,30 @@ type response struct {
 	} `json:"error,omitempty"`
 }
 
+// retriableError wraps an HTTP-level error and signals whether retry is appropriate.
+type retriableError struct {
+	statusCode int
+	msg        string
+}
+
+func (e *retriableError) Error() string { return e.msg }
+
+func isRetriable(err error) bool {
+	var re *retriableError
+	if err == nil {
+		return false
+	}
+	// type-assert manually since errors.As needs a pointer-to-pointer
+	if re, ok := err.(*retriableError); ok {
+		return re.statusCode == 429 || re.statusCode >= 500
+	}
+	_ = re
+	return false
+}
+
 // Generate calls the OpenRouter API and returns the CLAUDE.md content.
-func Generate(apiKey, model, prompt string) (string, error) {
+// timeoutSec controls the per-attempt HTTP timeout; retries on 429 / 5xx (up to 3 attempts).
+func Generate(apiKey, model, prompt string, timeoutSec int) (string, error) {
 	body := request{
 		Model: model,
 		Messages: []message{
@@ -47,6 +70,28 @@ func Generate(apiKey, model, prompt string) (string, error) {
 		return "", fmt.Errorf("marshal error: %w", err)
 	}
 
+	client := &http.Client{Timeout: time.Duration(timeoutSec) * time.Second}
+
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(2<<uint(attempt-1)) * time.Second // 2s, 4s
+			time.Sleep(backoff)
+		}
+
+		content, err := doRequest(client, apiKey, data)
+		if err == nil {
+			return content, nil
+		}
+		lastErr = err
+		if !isRetriable(err) {
+			break
+		}
+	}
+	return "", lastErr
+}
+
+func doRequest(client *http.Client, apiKey string, data []byte) (string, error) {
 	req, err := http.NewRequest("POST", openRouterURL, bytes.NewReader(data))
 	if err != nil {
 		return "", fmt.Errorf("request error: %w", err)
@@ -57,7 +102,6 @@ func Generate(apiKey, model, prompt string) (string, error) {
 	req.Header.Set("HTTP-Referer", "https://github.com/elev1e1n/spelunk-md")
 	req.Header.Set("X-Title", "spelunk-md")
 
-	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("http error: %w", err)
@@ -67,6 +111,17 @@ func Generate(apiKey, model, prompt string) (string, error) {
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("read error: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		snippet := strings.TrimSpace(string(raw))
+		if len(snippet) > 300 {
+			snippet = snippet[:300]
+		}
+		return "", &retriableError{
+			statusCode: resp.StatusCode,
+			msg:        fmt.Sprintf("http %d: %s", resp.StatusCode, snippet),
+		}
 	}
 
 	var result response

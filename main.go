@@ -14,20 +14,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// version is set at build time via -ldflags "-X main.version=..."
+var version = "dev"
+
 var (
-	flagAPIKey string
-	flagModel  string
-	flagOutput string
-	flagPath   string
-	flagDryRun bool
+	flagAPIKey  string
+	flagModel   string
+	flagOutput  string
+	flagPath    string
+	flagDryRun  bool
+	flagTimeout int
+	flagForce   bool
 )
 
 func main() {
 	root := &cobra.Command{
-		Use:   "spelunk-md",
-		Short: "Generate CLAUDE.md for any codebase using AI",
-		Long:  `Scans your project (files, stack, git history) and generates a tailored CLAUDE.md via OpenRouter.`,
-		RunE:  run,
+		Use:     "spelunk-md",
+		Short:   "Generate CLAUDE.md for any codebase using AI",
+		Long:    `Scans your project (files, stack, git history) and generates a tailored CLAUDE.md via OpenRouter.`,
+		Version: version,
+		RunE:    run,
 	}
 
 	root.Flags().StringVar(&flagAPIKey, "api-key", "", `OpenRouter API key. Use "clear" to remove saved key`)
@@ -35,6 +41,8 @@ func main() {
 	root.Flags().StringVar(&flagOutput, "output", "CLAUDE.md", "Output file path")
 	root.Flags().StringVar(&flagPath, "path", ".", "Project root path")
 	root.Flags().BoolVar(&flagDryRun, "dry-run", false, "Print the prompt without calling the API")
+	root.Flags().IntVar(&flagTimeout, "timeout", 120, "API request timeout in seconds")
+	root.Flags().BoolVar(&flagForce, "force", false, "Overwrite output file without prompting")
 
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
@@ -110,19 +118,33 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	outputPath := flagOutput
+	if !filepath.IsAbs(outputPath) {
+		outputPath = filepath.Join(root, outputPath)
+	}
+
+	// Guard against silent overwrite unless --force is set.
+	if !flagForce {
+		if _, err := os.Stat(outputPath); err == nil {
+			fmt.Printf("  %s already exists. Overwrite? [y/N] ", filepath.Base(outputPath))
+			var answer string
+			fmt.Scanln(&answer)
+			if strings.ToLower(strings.TrimSpace(answer)) != "y" {
+				fmt.Println("  aborted")
+				return nil
+			}
+		}
+	}
+
 	ui.Divider()
 	spin = ui.NewModelSpinner(flagModel)
 	spin.Start()
-	content, err := generator.Generate(apiKey, flagModel, p)
+	content, err := generator.Generate(apiKey, flagModel, p, flagTimeout)
 	spin.Stop()
 	if err != nil {
 		return err
 	}
 
-	outputPath := flagOutput
-	if !filepath.IsAbs(outputPath) {
-		outputPath = filepath.Join(root, outputPath)
-	}
 	if err := generator.WriteFile(outputPath, content); err != nil {
 		return err
 	}

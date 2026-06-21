@@ -67,7 +67,11 @@ spelunk-md --api-key clear
 Через `go install`:
 
 ```bash
+# Последняя версия
 go install github.com/elev1e1n/spelunk-md@latest
+
+# Конкретная версия
+go install github.com/elev1e1n/spelunk-md@v1.0.0
 ```
 
 Или собрать из исходников:
@@ -75,7 +79,13 @@ go install github.com/elev1e1n/spelunk-md@latest
 ```bash
 git clone https://github.com/elev1e1n/spelunk-md
 cd spelunk-md
-go build -o spelunk-md .
+
+# Бинарник соберётся с версией из ближайшего git-тега
+just build
+
+# Или напрямую через go build
+VERSION=$(git describe --tags --always --dirty)
+go build -ldflags "-X main.version=$VERSION" -o spelunk-md .
 ```
 
 > [!IMPORTANT]

@@ -126,11 +126,11 @@ func run(cmd *cobra.Command, args []string) error {
 	// Guard against silent overwrite unless --force is set.
 	if !flagForce {
 		if _, err := os.Stat(outputPath); err == nil {
-			fmt.Printf("  %s already exists. Overwrite? [y/N] ", filepath.Base(outputPath))
+			ui.Confirm(filepath.Base(outputPath))
 			var answer string
 			fmt.Scanln(&answer)
 			if strings.ToLower(strings.TrimSpace(answer)) != "y" {
-				fmt.Println("  aborted")
+				fmt.Println()
 				return nil
 			}
 		}

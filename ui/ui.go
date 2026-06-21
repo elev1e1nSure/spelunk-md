@@ -60,6 +60,15 @@ func KeySaved(msg string) {
 	fmt.Printf("\n%s●%s  %s%s%s\n\n", teal, reset, bold, msg, reset)
 }
 
+func Confirm(filename string) {
+	fmt.Printf("\n%s◆%s  %s%s%s  %sexists — overwrite?%s %s[y/N]%s ",
+		coral, reset,
+		bold, filename, reset,
+		faint, reset,
+		chalk, reset,
+	)
+}
+
 func DryRun(prompt string) {
 	fmt.Printf("%sdry run%s\n\n", faint, reset)
 	fmt.Println(prompt)

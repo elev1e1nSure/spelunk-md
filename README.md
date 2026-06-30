@@ -2,7 +2,7 @@
 
 # spelunk-md
 
-**Генерирует `CLAUDE.md` для любого проекта — один запуск, без настройки.**
+**A chronic habit of descending where no one asked.**
 
 [![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
 [![OpenRouter](https://img.shields.io/badge/OpenRouter-powered-7C3AED?style=flat-square&logo=openai&logoColor=white)](https://openrouter.ai)
@@ -14,84 +14,59 @@
 
 ---
 
-[`CLAUDE.md`](https://docs.anthropic.com/en/docs/claude-code/memory) — файл, который Claude Code читает в начале каждой сессии: архитектура проекта, команды сборки, соглашения по коду, ловушки. Писать его вручную — долго и лениво. `spelunk-md` сканирует проект и генерирует его за секунды через любую модель [OpenRouter](https://openrouter.ai).
+Descends, sniffs out the manifests, leafs through commits, comes back up with a `.md` thing.
 
-## Быстрый старт
+## Quick start
 
-```bash
-# Установить
+\`\`\`bash
 go install github.com/elev1e1n/spelunk-md@latest
-
-# Сохранить API-ключ один раз
 spelunk-md --api-key sk-or-xxxxxxxxxxxxxxxx
-
-# Запустить в проекте
 cd /path/to/your/project
 spelunk-md
-```
+\`\`\`
 
 > [!TIP]
-> Альтернатива keyring — переменная окружения `OPENROUTER_API_KEY`. Удобно для CI и WSL.
+> No need to save the key — `OPENROUTER_API_KEY` works too. The spelunker isn't picky.
 
-## Как это работает
+## What happens while you wait
 
-`spelunk-md` обходит проект и собирает всё, что нужно модели для понимания кодовой базы: файловое дерево с учётом `.gitignore` (включая вложенные), стек технологий по расширениям и манифестам (`go.mod`, `package.json`, `Cargo.toml`), содержимое ключевых конфигов (`Makefile`, `Dockerfile`, `tsconfig.json` и подобных), последние 30 коммитов из git и `README.md` если он есть. Всё это собирается в один структурированный промпт и отправляется в OpenRouter. Результат записывается в `CLAUDE.md`.
+A file tree (respecting `.gitignore`), manifests (`go.mod`, `package.json`, `Cargo.toml`), key configs, the last 30 commits, a README if you're lucky. All of it goes into one prompt, the prompt goes to OpenRouter, out comes a map file.
 
-Перед перезаписью существующего файла инструмент спросит подтверждение. Флаг `--force` отключает вопрос.
+It won't touch an existing file without asking. If manners get in the way — `--force`.
 
 > [!NOTE]
-> Модель по умолчанию — `deepseek/deepseek-v4-flash`. Быстрая и дешёвая, хорошо справляется с анализом кода. Для более детального результата попробуй `--model anthropic/claude-sonnet-4.6` или `--model google/gemini-2.5-pro`.
+> `deepseek/deepseek-v4-flash` runs by default — cheap, fast. For a more deliberate result — `--model anthropic/claude-sonnet-4.6` or `--model google/gemini-2.5-pro`.
 
-## Примеры
+## Examples
 
-```bash
-# Внешний проект
+\`\`\`bash
 spelunk-md --path ~/projects/my-app
-
-# Другая модель
 spelunk-md --model anthropic/claude-opus-4
-
-# Посмотреть промпт без вызова API
 spelunk-md --dry-run
-
-# Записать в другой файл
 spelunk-md --output docs/PROJECT.md --force
-
-# Удалить сохранённый ключ
 spelunk-md --api-key clear
-```
+\`\`\`
 
-Полный список флагов: `spelunk-md --help`.
+Full flag list: `spelunk-md --help`.
 
-## Установка
+## Install
 
-Через `go install`:
-
-```bash
-# Последняя версия
+\`\`\`bash
 go install github.com/elev1e1n/spelunk-md@latest
-
-# Конкретная версия
 go install github.com/elev1e1n/spelunk-md@v1.0.0
-```
+\`\`\`
 
-Или собрать из исходников:
+Or from source:
 
-```bash
+\`\`\`bash
 git clone https://github.com/elev1e1n/spelunk-md
 cd spelunk-md
-
-# Бинарник соберётся с версией из ближайшего git-тега
 just build
-
-# Или напрямую через go build
-VERSION=$(git describe --tags --always --dirty)
-go build -ldflags "-X main.version=$VERSION" -o spelunk-md .
-```
+\`\`\`
 
 > [!IMPORTANT]
-> API-ключ хранится в системном keyring — macOS Keychain, Windows Credential Manager или Linux Secret Service. В коде и файлах проекта ключ не появляется.
+> The key lives in the system keyring — Keychain, Credential Manager, or Secret Service. It never appears in code or project files.
 
-## Лицензия
+## License
 
 [MIT](LICENSE)

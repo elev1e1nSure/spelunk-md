@@ -16,6 +16,9 @@ const (
 
 	// EnvAPIKey is checked as a fallback when the keyring has no stored key.
 	EnvAPIKey = "OPENROUTER_API_KEY"
+
+	// EnvAPIKeyOpenAI is an additional fallback env var.
+	EnvAPIKeyOpenAI = "OPENAI_API_KEY"
 )
 
 var ErrNoAPIKey = errors.New(
@@ -39,8 +42,8 @@ func DeleteAPIKey() error {
 	return nil
 }
 
-// GetAPIKey retrieves the key from the system keyring, falling back to the
-// OPENROUTER_API_KEY environment variable if the keyring has no entry.
+// GetAPIKey retrieves the key from the system keyring, falling back to
+// OPENROUTER_API_KEY and OPENAI_API_KEY environment variables.
 // Keys sourced from env are used as-is and are never persisted to the keyring.
 func GetAPIKey() (string, error) {
 	key, err := keyring.Get(serviceName, accountName)
@@ -49,11 +52,13 @@ func GetAPIKey() (string, error) {
 	}
 
 	if !errors.Is(err, keyring.ErrNotFound) && err != nil {
-		// Real keyring error (not just "not found") — warn but continue to env fallback.
-		fmt.Fprintf(os.Stderr, "warning: keyring error: %v — falling back to %s\n", err, EnvAPIKey)
+		fmt.Fprintf(os.Stderr, "warning: keyring error: %v — falling back to env vars\n", err)
 	}
 
 	if envKey := os.Getenv(EnvAPIKey); envKey != "" {
+		return envKey, nil
+	}
+	if envKey := os.Getenv(EnvAPIKeyOpenAI); envKey != "" {
 		return envKey, nil
 	}
 

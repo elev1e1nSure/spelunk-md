@@ -2,6 +2,7 @@ package generator
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,9 +10,13 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 const openRouterURL = "https://openrouter.ai/api/v1/chat/completions"
+
+var rateLimiter = rate.NewLimiter(10, 3)
 
 type message struct {
 	Role    string `json:"role"`
@@ -19,8 +24,10 @@ type message struct {
 }
 
 type request struct {
-	Model    string    `json:"model"`
-	Messages []message `json:"messages"`
+	Model       string    `json:"model"`
+	Messages    []message `json:"messages"`
+	Temperature float64   `json:"temperature"`
+	MaxTokens   int       `json:"max_tokens"`
 }
 
 type choice struct {
@@ -58,11 +65,15 @@ func isRetriable(err error) bool {
 // Generate calls the OpenRouter API and returns the CLAUDE.md content.
 // timeoutSec controls the per-attempt HTTP timeout; retries on 429 / 5xx (up to 3 attempts).
 func Generate(apiKey, model, prompt string, timeoutSec int) (string, error) {
+	if err := rateLimiter.Wait(context.Background()); err != nil {
+		return "", fmt.Errorf("rate limiter: %w", err)
+	}
+
 	body := request{
-		Model: model,
-		Messages: []message{
-			{Role: "user", Content: prompt},
-		},
+		Model:       model,
+		Messages:    []message{{Role: "user", Content: prompt}},
+		Temperature: 0.7,
+		MaxTokens:   8192,
 	}
 
 	data, err := json.Marshal(body)
@@ -99,6 +110,7 @@ func doRequest(client *http.Client, apiKey string, data []byte) (string, error) 
 
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "spelunk-md")
 	req.Header.Set("HTTP-Referer", "https://github.com/elev1e1n/spelunk-md")
 	req.Header.Set("X-Title", "spelunk-md")
 

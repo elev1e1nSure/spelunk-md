@@ -10,7 +10,7 @@ import (
 	"github.com/elev1e1n/spelunk-md/scanner"
 )
 
-const maxPromptBytes = 80_000
+const maxPromptBytes = 320_000 // ~80k tokens
 
 // manifests parsed into Meta — skip raw dump in prompt.
 var skipRaw = map[string]bool{
@@ -34,32 +34,28 @@ func Build(ctx *Context) string {
 
 	var sb strings.Builder
 
-	sb.WriteString(`You are an expert software engineer generating a CLAUDE.md file.
+	// ── 1. DATA AT THE TOP ───────────────────────────────────────────────
+	// Long inputs go above the instruction: the model keeps the instruction
+	// fresher when it sits last. Everything here is raw material, tagged by
+	// how the model is allowed to use it.
+	sb.WriteString("<codebase_scan>\n")
+	sb.WriteString("<!-- RAW MATERIAL for writing CLAUDE.md. Section tags:\n")
+	sb.WriteString("     [authoritative] — maintainer's own words. Must be reflected in the\n")
+	sb.WriteString("        output; preserve meaning, rephrase minimally, never drop.\n")
+	sb.WriteString("     [usable] — may surface directly in the output (e.g. commands).\n")
+	sb.WriteString("     [reference-only] — infer from this, but do NOT copy verbatim or\n")
+	sb.WriteString("        reproduce as a list (e.g. dependency graph, language inventory). -->\n\n")
 
-CLAUDE.md is read by Claude Code at the start of every session. It should help an AI assistant understand:
-- What the project is and does
-- Tech stack and key dependencies
-- How to build, run, and test it
-- Architecture decisions and conventions
-- Gotchas and non-obvious constraints
-
-Output ONLY the CLAUDE.md content. No preamble, no explanation, no code fences around the whole document.
-Use ## headings. Be specific — generic boilerplate is useless.
-
----
-
-`)
-
-	// User context — written by maintainer, authoritative.
+	// User context — written by maintainer, highest priority.
 	if ctx.Meta != nil && ctx.Meta.UserContext != "" {
-		sb.WriteString("## USER CONTEXT\n")
-		sb.WriteString("> Written by the project maintainer. Treat as authoritative.\n\n")
+		sb.WriteString("## USER CONTEXT [authoritative]\n")
+		sb.WriteString("> Written by the project maintainer. Highest priority.\n\n")
 		sb.WriteString(ctx.Meta.UserContext)
 		sb.WriteString("\n\n")
 	}
 
 	// Structured project facts.
-	sb.WriteString(fmt.Sprintf("## PROJECT\nName: %s\n", ctx.ProjectName))
+	sb.WriteString(fmt.Sprintf("## PROJECT [usable]\nName: %s\n", ctx.ProjectName))
 	if ctx.Git.IsRepo && ctx.Git.RemoteURL != "" {
 		sb.WriteString(fmt.Sprintf("Repository: %s\n", ctx.Git.RemoteURL))
 	}
@@ -84,33 +80,40 @@ Use ## headings. Be specific — generic boilerplate is useless.
 	}
 	sb.WriteString("\n")
 
+	// Stack inventory — model reads this from config files itself, so it's
+	// reference-only: used to understand the project, never echoed as a list.
 	if ctx.Stack != nil {
 		if len(ctx.Stack.Languages) > 0 {
-			sb.WriteString(fmt.Sprintf("## LANGUAGES\n%s\n\n", strings.Join(ctx.Stack.Languages, ", ")))
+			sb.WriteString(fmt.Sprintf("## LANGUAGES [reference-only]\n%s\n\n", strings.Join(ctx.Stack.Languages, ", ")))
 		}
 		if len(ctx.Stack.Frameworks) > 0 {
-			sb.WriteString(fmt.Sprintf("## FRAMEWORKS & LIBRARIES\n%s\n\n", strings.Join(ctx.Stack.Frameworks, ", ")))
+			sb.WriteString(fmt.Sprintf("## FRAMEWORKS & LIBRARIES [reference-only]\n%s\n\n", strings.Join(ctx.Stack.Frameworks, ", ")))
 		}
 		if len(ctx.Stack.Tools) > 0 {
-			sb.WriteString(fmt.Sprintf("## TOOLS\n%s\n\n", strings.Join(ctx.Stack.Tools, ", ")))
+			sb.WriteString(fmt.Sprintf("## TOOLS [reference-only]\n%s\n\n", strings.Join(ctx.Stack.Tools, ", ")))
 		}
 	}
 
+	// Build commands — core of CLAUDE.md, may surface directly.
 	if ctx.Meta != nil && len(ctx.Meta.BuildTargets) > 0 {
-		sb.WriteString(fmt.Sprintf("## BUILD COMMANDS\n%s\n\n", strings.Join(ctx.Meta.BuildTargets, ", ")))
+		sb.WriteString(fmt.Sprintf("## BUILD COMMANDS [usable]\n%s\n\n", strings.Join(ctx.Meta.BuildTargets, ", ")))
 	}
 
+	// Key deps — inventory, reference-only.
 	if ctx.Meta != nil && len(ctx.Meta.KeyDeps) > 0 {
-		sb.WriteString("## KEY DEPENDENCIES\n")
+		sb.WriteString("## KEY DEPENDENCIES [reference-only]\n")
 		for _, d := range ctx.Meta.KeyDeps {
 			sb.WriteString("- " + d + "\n")
 		}
 		sb.WriteString("\n")
 	}
 
+	// Internal import structure — the model infers architecture and module
+	// boundaries from this. Renamed from "package dependencies" so the model
+	// reads it as structure, not as a list to reproduce.
 	deps := scanner.ScanPackageDeps(ctx.Tree.Root, ctx.Tree.Entries)
 	if len(deps) > 0 {
-		sb.WriteString("## PACKAGE DEPENDENCIES\n")
+		sb.WriteString("## MODULE GRAPH (internal import structure) [reference-only]\n")
 		var pkgs []string
 		for pkg := range deps {
 			pkgs = append(pkgs, pkg)
@@ -125,7 +128,8 @@ Use ## headings. Be specific — generic boilerplate is useless.
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("## FILE STRUCTURE\n```\n")
+	// File tree — infer layout from it, don't reprint it.
+	sb.WriteString("## FILE STRUCTURE [reference-only]\n```\n")
 	sb.WriteString(ctx.Tree.Render())
 	sb.WriteString("```\n\n")
 
@@ -140,7 +144,7 @@ Use ## headings. Be specific — generic boilerplate is useless.
 		sourceBlocks = append(sourceBlocks, fmt.Sprintf("### %s\n```go\n%s\n```\n", src, string(content)))
 	}
 	if len(sourceBlocks) > 0 {
-		sb.WriteString("## KEY SOURCE FILES\n")
+		sb.WriteString("## KEY SOURCE FILES [reference-only]\n")
 		for _, block := range sourceBlocks {
 			sb.WriteString(block)
 		}
@@ -148,7 +152,7 @@ Use ## headings. Be specific — generic boilerplate is useless.
 	}
 
 	if ctx.Sigs != nil && len(ctx.Sigs.Lines) > 0 {
-		sb.WriteString(fmt.Sprintf("## CODE SIGNATURES (%s)\n```\n", ctx.Sigs.Lang))
+		sb.WriteString(fmt.Sprintf("## CODE SIGNATURES (%s) [reference-only]\n```\n", ctx.Sigs.Lang))
 		for _, line := range ctx.Sigs.Lines {
 			sb.WriteString(line + "\n")
 		}
@@ -173,7 +177,7 @@ Use ## headings. Be specific — generic boilerplate is useless.
 				continue
 			}
 			if firstHeader {
-				sb.WriteString("## KEY CONFIGURATION FILES\n\n")
+				sb.WriteString("## KEY CONFIGURATION FILES [reference-only]\n\n")
 				firstHeader = false
 			}
 			fmt.Fprintf(&sb, "### %s\n```\n%s\n```\n\n", name, content)
@@ -184,7 +188,7 @@ Use ## headings. Be specific — generic boilerplate is useless.
 				continue
 			}
 			if firstHeader {
-				sb.WriteString("## KEY CONFIGURATION FILES\n\n")
+				sb.WriteString("## KEY CONFIGURATION FILES [reference-only]\n\n")
 				firstHeader = false
 			}
 			fmt.Fprintf(&sb, "### %s\n```\n%s\n```\n\n", name, content)
@@ -192,34 +196,66 @@ Use ## headings. Be specific — generic boilerplate is useless.
 	}
 
 	if ctx.Git.IsRepo && ctx.Git.RecentCommits != "" {
-		sb.WriteString("## RECENT GIT HISTORY (last 30 commits)\n```\n")
+		sb.WriteString("## RECENT GIT HISTORY (last 30 commits) [reference-only]\n```\n")
 		sb.WriteString(ctx.Git.RecentCommits)
 		sb.WriteString("\n```\n\n")
 	}
 
-	sb.WriteString(`---
+	sb.WriteString("</codebase_scan>\n\n---\n\n")
 
-Generate the CLAUDE.md now. Required sections (skip if not applicable):
+	// ── 2. INSTRUCTION AT THE BOTTOM ─────────────────────────────────────
+	sb.WriteString(`You are an expert software engineer writing a CLAUDE.md file for the codebase in <codebase_scan> above.
 
-## Project Overview
-## Tech Stack
-## Project Structure
-## Development Commands
-## Architecture & Key Decisions
-## Code Conventions
-## Important Notes / Gotchas
+CLAUDE.md is injected into the AI assistant's context at the start of EVERY session and costs tokens on every turn, so it must be dense and high-signal. The test for every line: does it change how the assistant works in this repo, OR is it something the assistant would discover on its own within one session of reading the code? If the latter, leave it out.
 
-Use BUILD COMMANDS and KEY DEPENDENCIES verbatim where relevant — don't invent commands.
-Code Conventions should reflect what's actually visible in the code, not generic language defaults.
+The <codebase_scan> is tagged by section:
+- [authoritative]: reflect this in the output. It is the maintainer's intent — preserve its meaning, rephrase minimally, never drop it.
+- [usable]: may appear directly in your output.
+- [reference-only]: use it to understand the project, but never copy it verbatim and never reproduce it as a list. Languages, frameworks, and dependencies are reference-only — the assistant reads those from config files itself, so listing them wastes context. Instead, use the module graph and file tree to describe architecture and layout in your own words.
 
-Before outputting, verify the following and fix any mismatches:
-- Project Structure must match FILE STRUCTURE exactly (same directories, same files, no invented paths).
-- Do not claim all code is in package main if FILE STRUCTURE shows packages like config/, generator/, prompt/, scanner/, ui/.
-- Mention only commands that exist in BUILD COMMANDS.
-- Mention only dependencies that exist in KEY DEPENDENCIES or KEY SOURCE FILES.
-- Architecture & Key Decisions must be supported by CODE SIGNATURES and KEY SOURCE FILES, not guessed.
-`)
+Include:
+- What the project is and does — 2-3 bullets, no more
+- Exact build / run / test / lint commands
+- Project layout: path → what lives there, for the few directories that matter
+- Conventions, constraints, and gotchas — especially the non-obvious ones a new engineer would get wrong
 
+Do NOT:
+- List languages, frameworks, tools, or dependencies (all reference-only — the assistant reads these itself)
+- Duplicate the README — reference it with @README.md instead
+- Pad with generic advice that applies to any project ("write clean code", "follow best practices")
+
+How to write it:
+- Imperatives, not observations. "Use X. Never Y." — not "the project generally uses X."
+- Every line must be verifiable: a command, a path, or a concrete rule. If a line can't be checked against the repo, cut it.
+- Negative rules carry as much weight as positive ones. State what NOT to do where the obvious default is wrong.
+- Keep the whole file under ~150 lines. Denser and shorter beats long and complete.
+
+Here is the shape of a good CLAUDE.md (study the density, not the content):
+
+<example>
+# quill-commit
+
+TUI git monitor that auto-commits on a timer. Go + Bubbletea.
+Details in @README.md.
+
+## Commands
+- Build: ` + "`go build -o quill ./cmd/quill`" + `
+- Test: ` + "`go test ./...`" + `
+- Lint: ` + "`golangci-lint run`" + `
+
+## Layout
+- ` + "`cmd/quill/`" + ` — entrypoint, flag parsing
+- ` + "`internal/watcher/`" + ` — fs polling + debounce logic
+- ` + "`internal/llm/`" + ` — OpenRouter client, commit-message generation
+
+## Conventions
+- Commit messages follow Conventional Commits. The LLM prompt enforces this — don't loosen it.
+- Never push. This tool commits only; pushing is the user's job.
+- API keys come from the OS keyring via ` + "`internal/secret`" + `. Never read keys from env or flags.
+- Bubbletea models stay pure: no I/O in Update(), side effects go through tea.Cmd.
+</example>
+
+Output ONLY the CLAUDE.md content — no preamble, no explanation, no code fences around the whole document. Use ## headings.`)
 	return sb.String()
 }
 

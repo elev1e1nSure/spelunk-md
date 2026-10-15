@@ -42,9 +42,23 @@ type dirIgnore struct {
 	gi  *gitignore.GitIgnore
 }
 
+// attrPattern stores a single .gitattributes rule: the pattern and whether it marks
+// files as binary, generated, or export-ignored.
+type attrPattern struct {
+	pattern  string
+	skipFile bool
+}
+
+// attrIgnore collects all skip-worthy .gitattributes patterns across the tree.
+type attrIgnore struct {
+	dir      string
+	patterns []attrPattern
+}
+
 // ScanFiles walks the project root and returns a FileTree.
 func ScanFiles(root string) (*FileTree, error) {
 	ignores := collectIgnores(root)
+	attrs := collectAttributes(root)
 
 	var entries []string
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -74,6 +88,9 @@ func ScanFiles(root string) (*FileTree, error) {
 			return nil
 		}
 		if matchesAnyIgnore(ignores, relSlash) {
+			return nil
+		}
+		if matchesAnyAttr(attrs, relSlash) {
 			return nil
 		}
 
@@ -127,6 +144,85 @@ func matchesAnyIgnore(ignores []dirIgnore, relSlash string) bool {
 		}
 		if di.gi.MatchesPath(toMatch) {
 			return true
+		}
+	}
+	return false
+}
+
+// collectAttributes walks the root collecting all .gitattributes files and extracts
+// patterns marked as binary, linguist-generated, or export-ignore.
+func collectAttributes(root string) []attrIgnore {
+	var result []attrIgnore
+	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || !info.IsDir() {
+			return nil
+		}
+		if info.Name() == ".git" {
+			return filepath.SkipDir
+		}
+		attrPath := filepath.Join(path, ".gitattributes")
+		data, err := os.ReadFile(attrPath)
+		if err != nil {
+			return nil
+		}
+		var patterns []attrPattern
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.Fields(line)
+			if len(parts) < 2 {
+				continue
+			}
+			pat := parts[0]
+			for _, attr := range parts[1:] {
+				attr = strings.TrimSpace(attr)
+				if attr == "binary" || attr == "-diff" || attr == "linguist-generated" ||
+					attr == "linguist-generated=true" || attr == "export-ignore" {
+					patterns = append(patterns, attrPattern{pattern: pat, skipFile: true})
+					break
+				}
+			}
+		}
+		if len(patterns) == 0 {
+			return nil
+		}
+		rel, _ := filepath.Rel(root, path)
+		rel = filepath.ToSlash(rel)
+		if rel == "." {
+			rel = ""
+		}
+		result = append(result, attrIgnore{dir: rel, patterns: patterns})
+		return nil
+	})
+	return result
+}
+
+// matchesAnyAttr checks if a slash-relative path matches any .gitattributes skip rule.
+func matchesAnyAttr(attrs []attrIgnore, relSlash string) bool {
+	for _, ai := range attrs {
+		var toMatch string
+		if ai.dir == "" {
+			toMatch = relSlash
+		} else if strings.HasPrefix(relSlash, ai.dir+"/") {
+			toMatch = relSlash[len(ai.dir)+1:]
+		} else {
+			continue
+		}
+		for _, ap := range ai.patterns {
+			if !ap.skipFile {
+				continue
+			}
+			matched, _ := filepath.Match(ap.pattern, toMatch)
+			if matched {
+				return true
+			}
+			// Also match against just the filename (common .gitattributes convention).
+			matched, _ = filepath.Match(ap.pattern, filepath.Base(toMatch))
+			if matched {
+				return true
+			}
 		}
 	}
 	return false

@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/elev1e1n/spelunk-md/scanner"
+	"github.com/elev1e1nSure/spelunk-md/scanner"
 )
 
 const maxPromptBytes = 320_000 // ~80k tokens

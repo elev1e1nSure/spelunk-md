@@ -1,4 +1,4 @@
-module github.com/elev1e1n/spelunk-md
+module github.com/elev1e1nSure/spelunk-md
 
 go 1.26.3
 

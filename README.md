@@ -6,9 +6,9 @@
 
 [![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
 [![OpenRouter](https://img.shields.io/badge/OpenRouter-powered-7C3AED?style=flat-square&logo=openai&logoColor=white)](https://openrouter.ai)
-[![CI](https://img.shields.io/github/actions/workflow/status/elev1e1n/spelunk-md/ci.yml?branch=main&style=flat-square)](https://github.com/elev1e1n/spelunk-md/actions)
-[![License MIT](https://img.shields.io/github/license/elev1e1n/spelunk-md?style=flat-square)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/elev1e1n/spelunk-md?style=flat-square&color=22c55e)](https://github.com/elev1e1n/spelunk-md/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/elev1e1nSure/spelunk-md/ci.yml?branch=main&style=flat-square)](https://github.com/elev1e1nSure/spelunk-md/actions)
+[![License MIT](https://img.shields.io/github/license/elev1e1nSure/spelunk-md?style=flat-square)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/elev1e1nSure/spelunk-md?style=flat-square&color=22c55e)](https://github.com/elev1e1nSure/spelunk-md/releases)
 
 </div>
 
@@ -19,7 +19,7 @@ Descends, sniffs out the manifests, leafs through commits, comes back up with a 
 ## Quick start
 
 \`\`\`bash
-go install github.com/elev1e1n/spelunk-md@latest
+go install github.com/elev1e1nSure/spelunk-md@latest
 spelunk-md --api-key sk-or-xxxxxxxxxxxxxxxx
 cd /path/to/your/project
 spelunk-md
@@ -52,14 +52,14 @@ Full flag list: `spelunk-md --help`.
 ## Install
 
 \`\`\`bash
-go install github.com/elev1e1n/spelunk-md@latest
-go install github.com/elev1e1n/spelunk-md@v1.0.0
+go install github.com/elev1e1nSure/spelunk-md@latest
+go install github.com/elev1e1nSure/spelunk-md@v1.0.0
 \`\`\`
 
 Or from source:
 
 \`\`\`bash
-git clone https://github.com/elev1e1n/spelunk-md
+git clone https://github.com/elev1e1nSure/spelunk-md
 cd spelunk-md
 just build
 \`\`\`

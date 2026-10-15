@@ -111,7 +111,7 @@ func doRequest(client *http.Client, apiKey string, data []byte) (string, error) 
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "spelunk-md")
-	req.Header.Set("HTTP-Referer", "https://github.com/elev1e1n/spelunk-md")
+	req.Header.Set("HTTP-Referer", "https://github.com/elev1e1nSure/spelunk-md")
 	req.Header.Set("X-Title", "spelunk-md")
 
 	resp, err := client.Do(req)

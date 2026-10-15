@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/elev1e1n/spelunk-md/config"
-	"github.com/elev1e1n/spelunk-md/generator"
-	"github.com/elev1e1n/spelunk-md/prompt"
-	"github.com/elev1e1n/spelunk-md/scanner"
-	"github.com/elev1e1n/spelunk-md/ui"
+	"github.com/elev1e1nSure/spelunk-md/config"
+	"github.com/elev1e1nSure/spelunk-md/generator"
+	"github.com/elev1e1nSure/spelunk-md/prompt"
+	"github.com/elev1e1nSure/spelunk-md/scanner"
+	"github.com/elev1e1nSure/spelunk-md/ui"
 	"github.com/spf13/cobra"
 )
 
